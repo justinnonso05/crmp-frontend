@@ -53,7 +53,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <>
+    <div className="rh-landing">
       <div id="rh-cursor" />
       <div id="rh-cursor-ring" />
       <Navbar />
@@ -65,6 +65,6 @@ export default function LandingPage() {
         <PinboardSection />
         <Footer />
       </main>
-    </>
+    </div>
   );
 }
