@@ -15,6 +15,7 @@ export const AUTH = {
 // ── Users ─────────────────────────────────────────────────────────
 export const USERS = {
   SEARCH: (query: string) => `${BASE}/api/users?q=${encodeURIComponent(query)}`,
+  PROFILE: `${BASE}/api/users/profile`,
 } as const;
 
 // ── Activities ────────────────────────────────────────────────────
@@ -29,7 +30,8 @@ export const PROJECTS = {
   DETAIL:        (id: string) => `${BASE}/api/projects/${id}`,
   ADD_MEMBER:    (id: string) => `${BASE}/api/projects/${id}/members`,
   REMOVE_MEMBER: (id: string, userId: string) => `${BASE}/api/projects/${id}/members/${userId}`,
-  ETHICS:        (id: string) => `${BASE}/api/projects/${id}/ethics`,
+  UPDATE_ETHICS: (id: string) => `${BASE}/api/projects/${id}/ethics`,
+  UPDATE_STATUS: (id: string) => `${BASE}/api/projects/${id}/status`,
 } as const;
 
 // ── Tasks ─────────────────────────────────────────────────────────
@@ -51,6 +53,7 @@ export const DOCUMENTS = {
 export const SURVEYS = {
   LIST:             (projectId: string) => `${BASE}/api/projects/${projectId}/surveys`,
   CREATE:           (projectId: string) => `${BASE}/api/projects/${projectId}/surveys`,
+  DETAIL:           (surveyId: string)  => `${BASE}/api/surveys/${surveyId}`,
   SUBMIT_RESPONSE:  (surveyId: string)  => `${BASE}/api/surveys/${surveyId}/responses`,
   GET_RESPONSES:    (surveyId: string)  => `${BASE}/api/surveys/${surveyId}/responses`,
 } as const;

@@ -14,7 +14,8 @@ interface User {
 
 const NAV = [
   { href: '/dashboard',  label: 'Dashboard',  icon: '◈' },
-  { href: '/settings',   label: 'Settings',   icon: '◎' },
+  { href: '/projects',   label: 'All Projects',icon: '▤' },
+  { href: '/profile',    label: 'Profile',    icon: '◎' },
 ];
 
 export default function DashboardShell({ children }: { children: ReactNode }) {
@@ -22,6 +23,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser]           = useState<User | null>(null);
   const [sideOpen, setSideOpen]   = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   /* ── Auth guard ── */
   useEffect(() => {
@@ -83,10 +85,40 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
           >
             ☰
           </button>
-          <div className="ds-topbar-right">
+          <div className="ds-topbar-right" style={{ marginLeft: 'auto', position: 'relative' }}>
             {user && (
-              <div className="ds-avatar" title={`${user.firstName} ${user.lastName}`}>
+              <div 
+                className="ds-avatar" 
+                title={`${user.firstName} ${user.lastName}`}
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                style={{ cursor: 'pointer' }}
+              >
                 {initials}
+              </div>
+            )}
+            
+            {dropdownOpen && (
+              <div style={{
+                position: 'absolute', top: '120%', right: 0,
+                background: 'var(--paper)', border: '1px solid rgba(0,0,0,0.1)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)', borderRadius: '4px',
+                minWidth: '150px', zIndex: 1000, overflow: 'hidden'
+              }}>
+                <Link 
+                  href="/profile" 
+                  className="dash-btn-ghost" 
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.75rem 1rem', borderBottom: '1px solid rgba(0,0,0,0.05)', borderRadius: 0 }}
+                  onClick={() => setDropdownOpen(false)}
+                >
+                  View Profile
+                </Link>
+                <button 
+                  className="dash-btn-ghost" 
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.75rem 1rem', borderRadius: 0, color: 'var(--error)' }}
+                  onClick={handleSignOut}
+                >
+                  Sign Out
+                </button>
               </div>
             )}
           </div>

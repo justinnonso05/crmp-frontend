@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import '../mobile-pins.css';
 
 const PINS = [
   {

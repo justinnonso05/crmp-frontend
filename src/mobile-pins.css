@@ -1,0 +1,22 @@
+@media (max-width: 1024px) {
+  #pinboard .pin-item.pin-5, 
+  #pinboard .pin-item.pin-6 {
+    display: none !important;
+  }
+  #pinboard .pin-item {
+    aspect-ratio: 1 / 1 !important;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  #pinboard .pin-body {
+    flex: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+  #pinboard {
+    min-height: 550px !important;
+  }
+}

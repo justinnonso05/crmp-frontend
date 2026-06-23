@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, getUser, getToken } from '@/lib/api';
-import { PROJECTS, TASKS, DOCUMENTS, SURVEYS, OUTPUTS } from '@/lib/endpoints';
+import { PROJECTS, TASKS, DOCUMENTS, SURVEYS, OUTPUTS, UPLOAD } from '@/lib/endpoints';
 import { getSocket } from '@/lib/socket';
 import UserSearchInput from '@/components/dashboard/UserSearchInput';
 
@@ -50,6 +50,7 @@ export default function ProjectPage() {
   const [tab, setTab]                 = useState<Tab>('tasks');
 
   /* ── per-tab data ── */
+  const [tasks,     setTasks]     = useState<Task[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [surveys,   setSurveys]   = useState<Survey[]>([]);
   const [outputs,   setOutputs]   = useState<Output[]>([]);
@@ -79,8 +80,13 @@ export default function ProjectPage() {
   const [showOutputModal, setShowOutputModal] = useState(false);
   const [outType,         setOutType]         = useState('JOURNAL');
   const [outCitation,     setOutCitation]     = useState('');
+  const [outFile,         setOutFile]         = useState<File | null>(null);
   const [outErr,          setOutErr]          = useState('');
   const [savingOut,       setSavingOut]       = useState(false);
+
+  /* ── alert & confirm modals ── */
+  const [alertMessage, setAlertMessage] = useState('');
+  const [confirmState, setConfirmState] = useState<{ message: string, onConfirm: () => void } | null>(null);
 
   /* ─── mount: auth + user ─── */
   useEffect(() => {
@@ -103,26 +109,28 @@ export default function ProjectPage() {
     })();
   }, [id]);
 
-  /* ─── fetch tab data lazily ─── */
-  const fetchTabData = useCallback(async (t: Tab) => {
+  /* ─── fetch all tab data concurrently ─── */
+  const fetchAllTabData = useCallback(() => {
     if (!id) return;
-    try {
-      if (t === 'documents') {
-        const d = await apiFetch<{ documents: Document[] }>(DOCUMENTS.LIST(id));
-        setDocuments(d.documents);
-      }
-      if (t === 'surveys') {
-        const d = await apiFetch<{ surveys: Survey[] }>(SURVEYS.LIST(id));
-        setSurveys(d.surveys);
-      }
-      if (t === 'outputs') {
-        const d = await apiFetch<{ outputs: Output[] }>(OUTPUTS.LIST(id));
-        setOutputs(d.outputs);
-      }
-    } catch { /* silent — errors shown per-tab */ }
+    apiFetch<{ tasks: Task[] }>(TASKS.LIST(id)).then(d => setTasks(d.tasks)).catch(console.error);
+    apiFetch<{ documents: Document[] }>(DOCUMENTS.LIST(id)).then(d => setDocuments(d.documents)).catch(console.error);
+    apiFetch<{ surveys: Survey[] }>(SURVEYS.LIST(id)).then(d => setSurveys(d.surveys)).catch(console.error);
+    apiFetch<{ outputs: Output[] }>(OUTPUTS.LIST(id)).then(d => setOutputs(d.outputs)).catch(console.error);
   }, [id]);
 
-  useEffect(() => { fetchTabData(tab); }, [tab, fetchTabData]);
+  /* ─── Status Update Handlers ─── */
+  async function handleUpdateStatus(newStatus: string) {
+    if (!project) return;
+    try {
+      const d = await apiFetch<{ project: Project }>(PROJECTS.UPDATE_STATUS(id), {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setProject(d.project);
+    } catch (e: any) { setAlertMessage(e.message || 'Failed to update status'); }
+  }
+
+  useEffect(() => { fetchAllTabData(); }, [fetchAllTabData]);
 
   /* ─── socket: join project room ─── */
   useEffect(() => {
@@ -209,15 +217,21 @@ export default function ProjectPage() {
     finally { setSavingMember(false); }
   }
 
-  async function removeMember(userId: string, userName: string) {
-    if (!confirm(`Are you sure you want to remove ${userName} from the project?`)) return;
-    try {
-      await apiFetch(PROJECTS.REMOVE_MEMBER(id, userId), { method: 'DELETE' });
-      setProject(p => p ? { ...p, members: p.members.filter(m => m.userId !== userId) } : p);
-      broadcastActivity('MEMBER_REMOVED', `${userName} was removed from the project`, userId, { targetName: userName, initiatorName: currentUser?.firstName });
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Failed to remove member.');
-    }
+  async function handleRemoveMember(userId: string, userName: string) {
+    setConfirmState({
+      message: `Are you sure you want to remove ${userName} from the project?`,
+      onConfirm: async () => {
+        setConfirmState(null);
+        if (!id) return;
+        try {
+          await apiFetch(PROJECTS.REMOVE_MEMBER(id, userId), { method: 'DELETE' });
+          setProject(p => p ? { ...p, members: p.members.filter(m => m.userId !== userId) } : null);
+          broadcastActivity('MEMBER_REMOVED', `${userName} was removed from the project`, userId, { targetName: userName, initiatorName: currentUser?.firstName });
+        } catch (e: unknown) {
+          setAlertMessage(e instanceof Error ? e.message : 'Failed to remove member.');
+        }
+      }
+    });
   }
 
   /* ─── document actions ─── */
@@ -243,13 +257,24 @@ export default function ProjectPage() {
     if (!outCitation.trim()) { setOutErr('Citation is required.'); return; }
     setSavingOut(true); setOutErr('');
     try {
+      let fileUrl = undefined;
+      if (outFile) {
+        const formData = new FormData();
+        formData.append('file', outFile);
+        const uploadRes = await apiFetch<{ fileUrl: string }>(UPLOAD.FILE, {
+          method: 'POST',
+          body: formData,
+        });
+        fileUrl = uploadRes.fileUrl;
+      }
+
       const d = await apiFetch<{ output: Output }>(OUTPUTS.CREATE(id), {
         method: 'POST',
-        body: JSON.stringify({ outputType: outType, citation: outCitation.trim() }),
+        body: JSON.stringify({ outputType: outType, citation: outCitation.trim(), fileUrl }),
       });
       setOutputs(prev => [d.output, ...prev]);
-      broadcastActivity('OUTPUT_LOGGED', `Research output "${outCitation.substring(0, 40)}…" was logged`, undefined, { outputTitle: outCitation, initiatorName: currentUser?.firstName });
-      setShowOutputModal(false); setOutType('JOURNAL'); setOutCitation('');
+      broadcastActivity('OUTPUT_LOGGED', `Output logged: ${outType}`, undefined, { outType, initiatorName: currentUser?.firstName });
+      setShowOutputModal(false); setOutCitation(''); setOutFile(null); setOutType('JOURNAL');
     } catch (e: unknown) { setOutErr(e instanceof Error ? e.message : 'Failed.'); }
     finally { setSavingOut(false); }
   }
@@ -279,8 +304,21 @@ export default function ProjectPage() {
       <div className="proj-page-header">
         <div className="proj-page-header-left">
           <div className="proj-page-badges">
-            <span className={`proj-badge badge--${project.status.toLowerCase()}`}>{project.status}</span>
-            <span className="proj-ethics">{ETHICS_LABELS[project.ethicalClearanceStatus] ?? project.ethicalClearanceStatus}</span>
+            {myRole === 'PI' ? (
+              <select 
+                className={`proj-badge badge--${project.status.toLowerCase()}`} 
+                value={project.status} 
+                onChange={e => handleUpdateStatus(e.target.value)}
+                style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto' }}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="ARCHIVED">ARCHIVED</option>
+              </select>
+            ) : (
+              <span className={`proj-badge badge--${project.status.toLowerCase()}`}>{project.status}</span>
+            )}
+            
             <span className="proj-role-chip">{ROLE_LABELS[myRole] ?? myRole}</span>
           </div>
           <h1 className="proj-page-title">{project.title}</h1>
@@ -369,7 +407,7 @@ export default function ProjectPage() {
                   <li key={doc.id} className="doc-item">
                     <div className="doc-item-info">
                       <span className="doc-item-title">{doc.title}</span>
-                      <span className="doc-item-meta">Last edited {formatDate(doc.updatedAt)}</span>
+                      <span className="doc-item-meta">Last edited {formatDateTime(doc.updatedAt)}</span>
                     </div>
                     <Link
                       href={`/projects/${id}/editor?doc=${doc.id}`}
@@ -478,7 +516,7 @@ export default function ProjectPage() {
                     <span className="member-role">{ROLE_LABELS[m.role] ?? m.role}</span>
                     {isPI && m.userId !== currentUser?.id && (
                       <button 
-                        onClick={() => removeMember(m.userId, `${m.user.firstName} ${m.user.lastName}`)}
+                        onClick={() => handleRemoveMember(m.userId, `${m.user.firstName} ${m.user.lastName}`)}
                         className="dash-btn-ghost" 
                         style={{ color: 'var(--error)', padding: '0.25rem 0.5rem' }}
                       >
@@ -602,6 +640,11 @@ export default function ProjectPage() {
                 onChange={e => { setOutCitation(e.target.value); setOutErr(''); }}
                 disabled={savingOut} />
             </Field>
+            <Field label="Attach File (Optional)" id="out-file">
+              <input id="out-file" className="auth-input" type="file"
+                onChange={e => { setOutFile(e.target.files?.[0] || null); setOutErr(''); }}
+                disabled={savingOut} />
+            </Field>
             {outErr && <p className="auth-error">{outErr}</p>}
             <ModalActions>
               <button type="button" className="dash-btn-ghost" onClick={() => setShowOutputModal(false)}>Cancel</button>
@@ -611,6 +654,43 @@ export default function ProjectPage() {
             </ModalActions>
           </form>
         </Modal>
+      )}
+
+      {/* ── Custom Alert Modal ── */}
+      {alertMessage && (
+        <div className="dash-modal-overlay">
+          <div className="dash-modal" style={{ maxWidth: '400px', textAlign: 'center' }}>
+            <h3 className="dash-modal-title" style={{ color: 'var(--error)' }}>Notice</h3>
+            <p style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>{alertMessage}</p>
+            <div className="dash-modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="dash-btn-primary" onClick={() => setAlertMessage('')}>
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Custom Confirm Modal ── */}
+      {confirmState && (
+        <div className="dash-modal-overlay">
+          <div className="dash-modal" style={{ maxWidth: '400px' }}>
+            <h3 className="dash-modal-title">Confirm Action</h3>
+            <p style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>{confirmState.message}</p>
+            <div className="dash-modal-actions">
+              <button className="dash-btn-ghost" onClick={() => setConfirmState(null)}>
+                Cancel
+              </button>
+              <button 
+                className="dash-btn-primary" 
+                onClick={confirmState.onConfirm}
+                style={{ backgroundColor: 'var(--error)' }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -648,5 +728,11 @@ function ModalActions({ children }: { children: React.ReactNode }) {
 function formatDate(iso: string) {
   try {
     return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+  } catch { return iso; }
+}
+
+function formatDateTime(iso: string) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
   } catch { return iso; }
 }

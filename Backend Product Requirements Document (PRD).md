@@ -1,6 +1,6 @@
 # Backend Product Requirements Document (PRD)
 
-**Project:** Collaborative Research Management Platform (CRMP) - Group 11
+**Project:** Collaborative Research Management Platform (CRMP) - 
 **Platform Type:** Centralized, Multi-tenant Web Application
 
 

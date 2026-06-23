@@ -15,8 +15,8 @@ type CanvasNode = {
   x: number; y: number;
   // Sine-driven velocity — never decays
   vxPhase: number; vyPhase: number;
-  vxFreq:  number; vyFreq:  number;
-  speed:   number;
+  vxFreq: number; vyFreq: number;
+  speed: number;
   baseR: number; phase: number; pulseSpeed: number; opPhase: number;
   breathePhase: number; breatheSpeed: number;
   name: string; active: boolean; pulsing: boolean; pulseT: number;
@@ -38,7 +38,7 @@ function triggerSearchWave() {
 
 export default function HeroSection() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const inputRef  = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,7 +54,7 @@ export default function HeroSection() {
 
     function init() {
       const rect = canvas!.getBoundingClientRect();
-      W = canvas!.width  = Math.round(rect.width)  || 600;
+      W = canvas!.width = Math.round(rect.width) || 600;
       H = canvas!.height = Math.round(rect.height) || 600;
       if (W < 10 || H < 10) return;
       nodesRef = [];
@@ -66,9 +66,9 @@ export default function HeroSection() {
           // Sine-driven velocity — unique phase/freq per node
           vxPhase: Math.random() * Math.PI * 2,
           vyPhase: Math.random() * Math.PI * 2,
-          vxFreq:  0.18 + Math.random() * 0.22,   // slow: ~0.18–0.40 rad/s
-          vyFreq:  0.15 + Math.random() * 0.20,
-          speed:   0.35 + Math.random() * 0.35,   // px/frame magnitude
+          vxFreq: 0.18 + Math.random() * 0.22,   // slow: ~0.18–0.40 rad/s
+          vyFreq: 0.15 + Math.random() * 0.20,
+          speed: 0.35 + Math.random() * 0.35,   // px/frame magnitude
           baseR: Math.random() * 3 + 3,
           phase: Math.random() * Math.PI * 2,
           pulseSpeed: Math.random() * 0.008 + 0.004,
@@ -128,28 +128,28 @@ export default function HeroSection() {
       // Draw nodes
       for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
-              // Move with sine-driven perpetual velocity
+        // Move with sine-driven perpetual velocity
         if (i !== dragIdx) {
           // Velocity comes from sine wave — NEVER decays to zero
           const vx = Math.sin(t * n.vxFreq + n.vxPhase) * n.speed;
           const vy = Math.cos(t * n.vyFreq + n.vyPhase) * n.speed;
           n.x += vx; n.y += vy;
           // Soft boundary — reflect phase so motion reverses smoothly near edges
-          if (n.x < 12)      n.vxPhase = Math.PI - n.vxPhase;
-          if (n.x > W - 12)  n.vxPhase = Math.PI - n.vxPhase;
-          if (n.y < 12)      n.vyPhase = -n.vyPhase;
-          if (n.y > H - 12)  n.vyPhase = -n.vyPhase;
+          if (n.x < 12) n.vxPhase = Math.PI - n.vxPhase;
+          if (n.x > W - 12) n.vxPhase = Math.PI - n.vxPhase;
+          if (n.y < 12) n.vyPhase = -n.vyPhase;
+          if (n.y > H - 12) n.vyPhase = -n.vyPhase;
           n.x = Math.max(8, Math.min(W - 8, n.x));
           n.y = Math.max(8, Math.min(H - 8, n.y));
         }
         if (n.pulsing) { n.pulseT += 0.055; if (n.pulseT > 1) n.pulsing = false; }
 
         // Breathe = slow oscillation of radius (+/- 2.5px)
-        const breathe  = Math.sin(t * n.breatheSpeed * 60 + n.breathePhase) * 2.5;
+        const breathe = Math.sin(t * n.breatheSpeed * 60 + n.breathePhase) * 2.5;
         // Pulse = faster flicker
-        const pulse    = Math.sin(t * n.pulseSpeed * 60 + n.phase) * 1.4;
-        const alpha    = 0.4 + Math.sin(t * n.pulseSpeed * 45 + n.opPhase) * 0.2;
-        const isHov    = i === hoverIdx;
+        const pulse = Math.sin(t * n.pulseSpeed * 60 + n.phase) * 1.4;
+        const alpha = 0.4 + Math.sin(t * n.pulseSpeed * 45 + n.opPhase) * 0.2;
+        const isHov = i === hoverIdx;
         const expandPulse = n.pulsing ? Math.sin(n.pulseT * Math.PI) * 6 : 0;
         const r = Math.max(1, n.baseR + breathe + pulse + (isHov ? 4 : 0) + expandPulse);
 
@@ -217,7 +217,7 @@ export default function HeroSection() {
         // No vx/vy to zero — sine motion resumes naturally on release
       }
     };
-    const onUp    = () => { dragIdx = -1; };
+    const onUp = () => { dragIdx = -1; };
     const onLeave = () => { dragIdx = -1; hMouse.x = -1; hMouse.y = -1; };
     const onClick = (e: MouseEvent) => {
       const rect = canvas!.getBoundingClientRect();
@@ -268,7 +268,7 @@ export default function HeroSection() {
   return (
     <section className="hero">
       <div className="hero-left">
-        <p className="hero-eyebrow">Collaborative Research Management Platform — Group 11</p>
+        <p className="hero-eyebrow">Collaborative Research Management Platform — </p>
 
         <h1 className="hero-h1">
           Where<br />
