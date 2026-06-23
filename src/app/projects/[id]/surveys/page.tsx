@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, getToken } from '@/lib/api';
 import { SURVEYS } from '@/lib/endpoints';
+import './survey-mobile.css';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 
 type QuestionType = 'SHORT_TEXT' | 'LONG_TEXT' | 'RADIO' | 'CHECKBOX';
@@ -166,7 +167,7 @@ export default function SurveyPage() {
 
   return (
     <div className="dash-shell">
-      <main className="dash-main" style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      <main className="dash-main survey-main-container">
         <Link href={`/projects/${projectId}`} className="dash-btn-ghost" style={{ marginBottom: '1rem', display: 'inline-block' }}>
           ← Back to Project
         </Link>
@@ -176,19 +177,28 @@ export default function SurveyPage() {
         {surveyId ? (
           /* ── RESULTS VIEW ── */
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <div className="survey-results-header">
               <div>
                 <h1 className="proj-page-title">{surveySchema?.title} - Results</h1>
                 <p className="proj-card-desc">{responses.length} responses</p>
               </div>
-              <button onClick={exportCSV} className="dash-btn-primary" disabled={responses.length === 0}>
+              <button onClick={exportCSV} className="dash-btn-primary survey-export-btn" disabled={responses.length === 0}>
                 Export CSV
               </button>
             </div>
 
             <div style={{ marginBottom: '2rem', padding: '1rem', background: 'rgba(5,150,105,0.05)', borderRadius: '8px', border: '1px solid rgba(5,150,105,0.2)' }}>
-              <strong>Public Survey Link:</strong><br />
-              <a href={`/surveys/${surveyId}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong>Public Survey Link:</strong>
+                <button 
+                  onClick={() => navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : ''}/surveys/${surveyId}`)}
+                  className="dash-btn-ghost" 
+                  style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                >
+                  Copy Link
+                </button>
+              </div>
+              <a href={`/surveys/${surveyId}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline', wordBreak: 'break-all', display: 'block', marginTop: '0.5rem' }}>
                 {typeof window !== 'undefined' ? window.location.origin : ''}/surveys/{surveyId}
               </a>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>Share this link with participants to collect responses anonymously.</p>
@@ -197,9 +207,9 @@ export default function SurveyPage() {
             {responses.length === 0 ? (
               <div className="dash-empty">No responses collected yet.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                 {surveySchema?.schemaJson.questions.map((q: any, i: number) => (
-                  <div key={q.id} className="dash-card" style={{ padding: '1.5rem' }}>
+                  <div key={q.id} className="dash-card survey-card-mobile" style={{ padding: '1.5rem' }}>
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '1rem' }}>{i + 1}. {q.question}</h3>
                     
                     {(q.type === 'RADIO' || q.type === 'CHECKBOX') && (
@@ -233,69 +243,6 @@ export default function SurveyPage() {
         ) : (
           /* ── BUILDER VIEW ── */
           <div>
-            <style dangerouslySetInnerHTML={{__html: `
-              .survey-builder-layout {
-                display: flex;
-                gap: 2rem;
-                align-items: flex-start;
-              }
-              .survey-builder-main {
-                flex: 1;
-                min-width: 0;
-              }
-              .survey-builder-sidebar {
-                position: sticky;
-                top: 2rem;
-                width: 250px;
-                flex-shrink: 0;
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-                padding: 1.5rem;
-              }
-              .survey-mobile-fab {
-                display: none;
-              }
-              .survey-mobile-close {
-                display: none;
-              }
-
-              @media (max-width: 768px) {
-                .survey-builder-layout {
-                  flex-direction: column;
-                }
-                .survey-builder-sidebar {
-                  position: fixed;
-                  top: 0;
-                  right: -100%;
-                  height: 100vh;
-                  width: 300px;
-                  z-index: 1000;
-                  border-radius: 0;
-                  transition: right 0.3s ease;
-                  box-shadow: -4px 0 15px rgba(0,0,0,0.1);
-                  background: var(--bg-shell);
-                }
-                .survey-builder-sidebar.mobile-open {
-                  right: 0;
-                }
-                .survey-mobile-fab {
-                  display: flex;
-                  position: fixed;
-                  bottom: 2rem;
-                  right: 2rem;
-                  z-index: 999;
-                  border-radius: 50px;
-                  padding: 1rem 1.5rem;
-                  box-shadow: 0 4px 15px rgba(5,150,105,0.3);
-                }
-                .survey-mobile-close {
-                  display: block;
-                  font-size: 1.5rem;
-                  padding: 0 0.5rem;
-                }
-              }
-            `}} />
             <h1 className="proj-page-title" style={{ marginBottom: '2rem' }}>Build New Survey</h1>
             
             <div className="survey-builder-layout">

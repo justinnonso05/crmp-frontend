@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, getUser, getToken } from '@/lib/api';
 import { PROJECTS, TASKS, DOCUMENTS, SURVEYS, OUTPUTS, UPLOAD } from '@/lib/endpoints';
+import { Trash2 } from 'lucide-react';
+import '../../../project-mobile.css';
 import { getSocket } from '@/lib/socket';
 import UserSearchInput from '@/components/dashboard/UserSearchInput';
 
@@ -512,7 +514,7 @@ export default function ProjectPage() {
                     <span className="member-name">{m.user.firstName} {m.user.lastName}</span>
                     <span className="member-email">{m.user.email}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }} className="member-item-actions">
                     <span className="member-role">{ROLE_LABELS[m.role] ?? m.role}</span>
                     {isPI && m.userId !== currentUser?.id && (
                       <button 

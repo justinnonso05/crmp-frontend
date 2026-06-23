@@ -1,0 +1,18 @@
+@media (max-width: 768px) {
+  .modal-box {
+    width: 90% !important;
+    max-width: 400px !important;
+    margin: 0 auto !important;
+    padding: 1.5rem !important;
+  }
+  
+  .member-item {
+    flex-wrap: wrap !important;
+  }
+  
+  .member-item-actions {
+    flex-basis: 100% !important;
+    margin-top: 0.5rem !important;
+    justify-content: space-between !important;
+  }
+}

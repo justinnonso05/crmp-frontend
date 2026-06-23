@@ -208,22 +208,20 @@ export default function CollaborativeEditorPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--surface)' }}>
       {/* Top Navigation Bar */}
-      <header style={{ 
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-        padding: '1rem 2rem', borderBottom: '1px solid rgba(0,0,0,0.05)', backgroundColor: 'var(--bg)' 
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link href={`/projects/${projectId}`} className="dash-btn-ghost" style={{ padding: '0.5rem' }}>
+      <header className="editor-header">
+        <div className="editor-header-left">
+          <Link href={`/projects/${projectId}`} className="dash-btn-ghost editor-back-btn">
             ← Back
           </Link>
-          <h1 className="proj-title" style={{ fontSize: '1.25rem', margin: 0 }}>{doc?.title}</h1>
+          <h1 className="proj-title editor-title">{doc?.title}</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        <div className="editor-header-right">
+          <div className="editor-save-status">
             {saving ? 'Saving...' : 'Saved'}
           </div>
-          <button onClick={exportToDoc} className="dash-btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
-            Export to .doc
+          <button onClick={exportToDoc} className="dash-btn-primary editor-export-btn">
+            <span className="export-text-full">Export to .doc</span>
+            <span className="export-text-mobile">Export</span>
           </button>
         </div>
       </header>
@@ -252,9 +250,27 @@ export default function CollaborativeEditorPage() {
           padding: 2rem !important;
           line-height: 1.6;
         }
+        .editor-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 1rem 2rem; border-bottom: 1px solid rgba(0,0,0,0.05); background-color: var(--bg);
+        }
+        .editor-header-left { display: flex; align-items: center; gap: 1rem; }
+        .editor-header-right { display: flex; align-items: center; gap: 1rem; }
+        .editor-back-btn { padding: 0.5rem; }
+        .editor-title { font-size: 1.25rem; margin: 0; }
+        .editor-save-status { font-size: 0.85rem; color: var(--text-muted); }
+        .editor-export-btn { padding: 0.4rem 0.8rem; font-size: 0.85rem; }
+        .export-text-mobile { display: none; }
+
         @media (max-width: 768px) {
           main { padding: 0 !important; }
           .ql-editor { padding: 1rem !important; }
+          .editor-header { padding: 1rem 0.5rem; align-items: flex-start; }
+          .editor-header-left { gap: 0.5rem; }
+          .editor-header-right { flex-direction: column-reverse; align-items: flex-end; gap: 0.2rem; }
+          .export-text-full { display: none; }
+          .export-text-mobile { display: inline; }
+          .editor-title { font-size: 1rem; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         }
       `}} />
     </div>
