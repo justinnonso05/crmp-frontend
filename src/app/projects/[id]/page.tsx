@@ -23,11 +23,18 @@ interface Survey   { id: string; title: string; isActive: boolean; createdAt: st
 interface Output   { id: string; outputType: string; citation: string; fileUrl?: string; createdAt: string; }
 interface Project {
   id: string; title: string; description: string;
-  status: string; ethicalClearanceStatus: string; createdAt: string;
+  status: string; internalStage: string; ethicalClearanceStatus: string; createdAt: string;
   members: Member[]; tasks: Task[];
+  ethicalClearanceNumber?: string;
+  ethicalApprovalDate?: string;
+  ethicalExpiryDate?: string;
+  ethicalClearanceDocumentUrl?: string;
+  documents?: Document[];
+  surveys?: Survey[];
+  outputs?: Output[];
 }
 
-type Tab = 'tasks' | 'documents' | 'surveys' | 'outputs' | 'members';
+type Tab = 'tasks' | 'documents' | 'surveys' | 'outputs' | 'members' | 'ethics';
 
 const ROLE_LABELS: Record<string, string> = {
   PI: 'Principal Investigator', CO_INVESTIGATOR: 'Co-Investigator',
@@ -56,6 +63,16 @@ export default function ProjectPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [surveys,   setSurveys]   = useState<Survey[]>([]);
   const [outputs,   setOutputs]   = useState<Output[]>([]);
+
+  // Ethics Tab State
+  const [ethicalStatus, setEthicalStatus] = useState('PENDING');
+  const [ethicalNumber, setEthicalNumber] = useState('');
+  const [ethicalApprovalDate, setEthicalApprovalDate] = useState('');
+  const [ethicalExpiryDate, setEthicalExpiryDate] = useState('');
+  const [ethicalDocUrl, setEthicalDocUrl] = useState('');
+  const [ethicalDocFile, setEthicalDocFile] = useState<File | null>(null);
+  const [savingEthics, setSavingEthics] = useState(false);
+  const [ethicsErr, setEthicsErr] = useState('');
 
   /* ── task modal ── */
   const [showTaskModal,  setShowTaskModal]  = useState(false);
@@ -96,19 +113,23 @@ export default function ProjectPage() {
     setCurrentUser(getUser<UserMeta>());
   }, [router]);
 
-  /* ─── fetch project ─── */
+  /* ─── Fetch data ─── */
   useEffect(() => {
     if (!id) return;
-    (async () => {
-      try {
-        const d = await apiFetch<{ project: Project }>(PROJECTS.DETAIL(id));
+    apiFetch<{ project: Project }>(PROJECTS.DETAIL(id))
+      .then(d => {
         setProject(d.project);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : 'Failed to load project.');
-      } finally {
+        setEthicalStatus(d.project.ethicalClearanceStatus || 'PENDING');
+        setEthicalNumber(d.project.ethicalClearanceNumber || '');
+        setEthicalApprovalDate(d.project.ethicalApprovalDate ? new Date(d.project.ethicalApprovalDate).toISOString().split('T')[0] : '');
+        setEthicalExpiryDate(d.project.ethicalExpiryDate ? new Date(d.project.ethicalExpiryDate).toISOString().split('T')[0] : '');
+        setEthicalDocUrl(d.project.ethicalClearanceDocumentUrl || '');
         setLoading(false);
-      }
-    })();
+      })
+      .catch(e => {
+        setError(e instanceof Error ? e.message : 'Error fetching project.');
+        setLoading(false);
+      });
   }, [id]);
 
   /* ─── fetch all tab data concurrently ─── */
@@ -153,8 +174,24 @@ export default function ProjectPage() {
 
   /* ─── derived ─── */
   const myRole    = project?.members.find(m => m.userId === currentUser?.id)?.role ?? '';
-  const isPI      = myRole === 'PI';
-  const canEdit   = myRole === 'PI' || myRole === 'CO_INVESTIGATOR';
+  async function handleUpdateInternalStage(newStage: string) {
+    if (!id || !project) return;
+    try {
+      await apiFetch(PROJECTS.UPDATE_INTERNAL_STAGE(id as string), {
+        method: 'PATCH',
+        body: JSON.stringify({ stage: newStage }),
+      });
+      setProject({ ...project, internalStage: newStage });
+      setAlertMessage('Internal stage updated successfully.');
+    } catch (e: unknown) {
+      setAlertMessage(e instanceof Error ? e.message : 'Failed to update internal stage.');
+    }
+  }
+
+  const isPI = myRole === 'PI';
+  const isReviewer = myRole === 'REVIEWER';
+  const canEditStatus = isPI || isReviewer;
+  const canEdit = isPI || myRole === 'CO_INVESTIGATOR';
   const canWrite  = canEdit || myRole === 'ASSISTANT';
 
   /* ─── emit activity helper ─── */
@@ -281,6 +318,39 @@ export default function ProjectPage() {
     finally { setSavingOut(false); }
   }
 
+  /* ─── ethics actions ─── */
+  async function updateEthicsDetails(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingEthics(true); setEthicsErr('');
+    try {
+      let fileUrl = ethicalDocUrl;
+      if (ethicalDocFile) {
+        const formData = new FormData();
+        formData.append('file', ethicalDocFile);
+        const uploadRes = await apiFetch<{ fileUrl: string }>(UPLOAD.FILE, {
+          method: 'POST',
+          body: formData,
+        });
+        fileUrl = uploadRes.fileUrl;
+        setEthicalDocUrl(fileUrl);
+      }
+
+      await apiFetch(PROJECTS.UPDATE_ETHICS(id as string), {
+        method: 'PATCH',
+        body: JSON.stringify({ 
+          status: ethicalStatus,
+          ethicalClearanceNumber: ethicalNumber,
+          ethicalClearanceDocumentUrl: fileUrl,
+          ethicalApprovalDate: ethicalApprovalDate || null,
+          ethicalExpiryDate: ethicalExpiryDate || null
+        }),
+      });
+      setProject(p => p ? { ...p, ethicalClearanceStatus: ethicalStatus as any, ethicalClearanceNumber: ethicalNumber, ethicalClearanceDocumentUrl: fileUrl, ethicalApprovalDate: ethicalApprovalDate, ethicalExpiryDate: ethicalExpiryDate } : null);
+      setAlertMessage('Ethics details updated successfully.');
+    } catch (e: unknown) { setEthicsErr(e instanceof Error ? e.message : 'Failed.'); }
+    finally { setSavingEthics(false); }
+  }
+
   /* ─── render guards ─── */
   if (loading) return (
     <div className="proj-loading">
@@ -305,23 +375,51 @@ export default function ProjectPage() {
       {/* ── Project header ── */}
       <div className="proj-page-header">
         <div className="proj-page-header-left">
-          <div className="proj-page-badges">
-            {myRole === 'PI' ? (
-              <select 
-                className={`proj-badge badge--${project.status.toLowerCase()}`} 
-                value={project.status} 
-                onChange={e => handleUpdateStatus(e.target.value)}
-                style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto' }}
-              >
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="COMPLETED">COMPLETED</option>
-                <option value="ARCHIVED">ARCHIVED</option>
-              </select>
-            ) : (
-              <span className={`proj-badge badge--${project.status.toLowerCase()}`}>{project.status}</span>
-            )}
+          <div className="proj-page-badges" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Status:</span>
+              {canEditStatus ? (
+                <select 
+                  className={`proj-badge badge--${project.status.toLowerCase()}`} 
+                  value={project.status} 
+                  onChange={e => handleUpdateStatus(e.target.value)}
+                  style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto' }}
+                >
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="COMPLETED">COMPLETED</option>
+                  <option value="ARCHIVED">ARCHIVED</option>
+                </select>
+              ) : (
+                <span className={`proj-badge badge--${project.status.toLowerCase()}`}>{project.status}</span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Stage:</span>
+              {canEditStatus ? (
+                <select 
+                  className={`proj-badge`} 
+                  value={project.internalStage || 'PROPOSAL'} 
+                  onChange={e => handleUpdateInternalStage(e.target.value)}
+                  style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto', background: 'var(--bg-hover)', color: 'var(--text)' }}
+                >
+                  <option value="PROPOSAL">PROPOSAL</option>
+                  <option value="ETHICS_REVIEW">ETHICS REVIEW</option>
+                  <option value="DATA_COLLECTION">DATA COLLECTION</option>
+                  <option value="DATA_ANALYSIS">DATA ANALYSIS</option>
+                  <option value="INTERNAL_REVIEW">INTERNAL REVIEW</option>
+                  <option value="PUBLISHED">PUBLISHED</option>
+                </select>
+              ) : (
+                <span className={`proj-badge`} style={{ background: 'var(--bg-hover)', color: 'var(--text)' }}>
+                  {(project.internalStage || 'PROPOSAL').replace('_', ' ')}
+                </span>
+              )}
+            </div>
             
-            <span className="proj-role-chip">{ROLE_LABELS[myRole] ?? myRole}</span>
+            <span className="proj-role-chip" style={{ marginLeft: 'auto' }}>{ROLE_LABELS[myRole] ?? myRole}</span>
           </div>
           <h1 className="proj-page-title">{project.title}</h1>
           <p className="proj-page-desc">{project.description}</p>
@@ -335,8 +433,8 @@ export default function ProjectPage() {
       </div>
 
       {/* ── Tabs ── */}
-      <div className="proj-tabs">
-        {(['tasks', 'documents', 'surveys', 'outputs', 'members'] as Tab[]).map(t => (
+      <div className="proj-tabs" style={{ flexWrap: 'wrap' }}>
+        {(['tasks', 'documents', 'surveys', 'outputs', 'members', 'ethics'] as Tab[]).map(t => (
           <button
             key={t}
             className={`proj-tab ${tab === t ? 'proj-tab--active' : ''}`}
@@ -430,9 +528,18 @@ export default function ProjectPage() {
             <div className="proj-tab-head">
               <h2 className="proj-tab-title">Surveys</h2>
               {canEdit && (
-                <Link href={`/projects/${id}/surveys`} className="dash-btn-primary">
+                <button 
+                  onClick={() => {
+                    if (ethicalStatus === 'APPROVED' || ethicalStatus === 'NOT_REQUIRED') {
+                      router.push(`/projects/${id}/surveys`);
+                    } else {
+                      setAlertMessage('Ethical clearance must be APPROVED or NOT REQUIRED before you can build surveys and collect data. Please update the Ethical Clearance Status in the Ethics tab.');
+                    }
+                  }} 
+                  className="dash-btn-primary"
+                >
                   + Build survey
-                </Link>
+                </button>
               )}
             </div>
             {surveys.length === 0 ? (
@@ -529,6 +636,62 @@ export default function ProjectPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* ════ ETHICS ════ */}
+        {tab === 'ethics' && (
+          <div>
+            <div className="proj-tab-head">
+              <h2 className="proj-tab-title">Ethics &amp; Compliance</h2>
+            </div>
+            
+            <form onSubmit={updateEthicsDetails} className="dash-card" style={{ padding: '2rem', maxWidth: '600px' }}>
+              <Field label="Ethical Clearance Status" id="ethics-status">
+                <select id="ethics-status" className="auth-input auth-select" value={ethicalStatus} onChange={e => setEthicalStatus(e.target.value)} disabled={!canEditStatus || savingEthics}>
+                  <option value="NOT_REQUIRED">Not Required / Exempt</option>
+                  <option value="PENDING">Pending (Not Submitted)</option>
+                  <option value="UNDER_REVIEW">Under Review</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="EXPIRED">Expired</option>
+                </select>
+              </Field>
+
+              <Field label="Clearance Number / ID" id="ethics-num">
+                <input id="ethics-num" type="text" className="auth-input" value={ethicalNumber} onChange={e => setEthicalNumber(e.target.value)} disabled={!canEditStatus || savingEthics} placeholder="e.g. IRB-2026-001" />
+              </Field>
+
+              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Approval Date" id="ethics-approve-date">
+                    <input id="ethics-approve-date" type="date" className="auth-input" value={ethicalApprovalDate} onChange={e => setEthicalApprovalDate(e.target.value)} disabled={!canEditStatus || savingEthics} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Expiry Date" id="ethics-expiry-date">
+                    <input id="ethics-expiry-date" type="date" className="auth-input" value={ethicalExpiryDate} onChange={e => setEthicalExpiryDate(e.target.value)} disabled={!canEditStatus || savingEthics} />
+                  </Field>
+                </div>
+              </div>
+
+              <Field label="Ethical Clearance Document (PDF/Word)" id="ethics-doc">
+                {ethicalDocUrl && (
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <a href={ethicalDocUrl} target="_blank" rel="noopener noreferrer" className="dash-btn-ghost" style={{ padding: '0.2rem 0.5rem', display: 'inline-block' }}>View Current Document</a>
+                  </div>
+                )}
+                <input id="ethics-doc" type="file" className="auth-input" onChange={e => setEthicalDocFile(e.target.files?.[0] || null)} disabled={!canEditStatus || savingEthics} accept=".pdf,.doc,.docx" />
+              </Field>
+
+              {ethicsErr && <p className="auth-error" style={{ marginBottom: '1rem' }}>{ethicsErr}</p>}
+              
+              {canEditStatus && (
+                <button type="submit" className="dash-btn-primary" disabled={savingEthics}>
+                  {savingEthics ? 'Saving...' : 'Save Ethics Details'}
+                </button>
+              )}
+            </form>
           </div>
         )}
       </div>
@@ -660,39 +823,36 @@ export default function ProjectPage() {
 
       {/* ── Custom Alert Modal ── */}
       {alertMessage && (
-        <div className="dash-modal-overlay">
-          <div className="dash-modal" style={{ maxWidth: '400px', textAlign: 'center' }}>
-            <h3 className="dash-modal-title" style={{ color: 'var(--error)' }}>Notice</h3>
-            <p style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>{alertMessage}</p>
-            <div className="dash-modal-actions" style={{ justifyContent: 'center' }}>
+        <Modal title="Notice" onClose={() => setAlertMessage('')}>
+          <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+            <p style={{ marginBottom: '2rem', color: 'var(--ink-mid)' }}>{alertMessage}</p>
+            <ModalActions>
               <button className="dash-btn-primary" onClick={() => setAlertMessage('')}>
                 OK
               </button>
-            </div>
+            </ModalActions>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ── Custom Confirm Modal ── */}
       {confirmState && (
-        <div className="dash-modal-overlay">
-          <div className="dash-modal" style={{ maxWidth: '400px' }}>
-            <h3 className="dash-modal-title">Confirm Action</h3>
-            <p style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>{confirmState.message}</p>
-            <div className="dash-modal-actions">
+        <Modal title="Confirm Action" onClose={() => setConfirmState(null)}>
+          <div style={{ padding: '1rem 0' }}>
+            <p style={{ marginBottom: '2rem', color: 'var(--ink-mid)' }}>{confirmState.message}</p>
+            <ModalActions>
               <button className="dash-btn-ghost" onClick={() => setConfirmState(null)}>
                 Cancel
               </button>
               <button 
                 className="dash-btn-primary" 
                 onClick={confirmState.onConfirm}
-                style={{ backgroundColor: 'var(--error)' }}
               >
                 Confirm
               </button>
-            </div>
+            </ModalActions>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

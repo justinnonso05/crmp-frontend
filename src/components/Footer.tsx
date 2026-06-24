@@ -114,7 +114,7 @@ export default function Footer() {
       {/* ── FOOTER ─── */}
       <footer>
         <span className="footer-logo">Research Hub</span>
-        <span className="footer-mono">Collaborative Research Management · CRMP Group 11 · 2025</span>
+        <span className="footer-mono">Collaborative Research Management · CRMP  · 2025</span>
       </footer>
     </>
   );

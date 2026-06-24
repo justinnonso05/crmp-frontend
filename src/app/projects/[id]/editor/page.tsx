@@ -2,18 +2,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import Quill from 'quill';
-import QuillCursors from 'quill-cursors';
+import type QuillType from 'quill';
+import type QuillCursorsType from 'quill-cursors';
 import 'quill/dist/quill.snow.css';
 import { getSocket } from '@/lib/socket';
 import { apiFetch, getUser } from '@/lib/api';
 import { DOCUMENTS } from '@/lib/endpoints';
 import Link from 'next/link';
-
-// Register the cursors module safely
-if (!Quill.imports['modules/cursors']) {
-  Quill.register('modules/cursors', QuillCursors);
-}
 
 interface Document {
   id: string;
@@ -30,8 +25,8 @@ export default function CollaborativeEditorPage() {
   const documentId = searchParams.get('doc');
 
   const editorRef = useRef<HTMLDivElement>(null);
-  const quillRef = useRef<Quill | null>(null);
-  const cursorsRef = useRef<QuillCursors | null>(null);
+  const quillRef = useRef<QuillType | null>(null);
+  const cursorsRef = useRef<QuillCursorsType | null>(null);
   const [doc, setDoc] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -67,98 +62,122 @@ export default function CollaborativeEditorPage() {
   useEffect(() => {
     if (loading || error || !doc || !currentUser || !documentId || !editorRef.current) return;
 
-    // 1. Initialize Quill
-    if (!quillRef.current) {
-      const quill = new Quill(editorRef.current, {
-        theme: 'snow',
-        modules: {
-          cursors: true,
-          toolbar: [
-            [{ header: [1, 2, 3, false] }],
-            ['bold', 'italic', 'underline', 'strike'],
-            [{ list: 'ordered' }, { list: 'bullet' }],
-            ['blockquote', 'code-block'],
-            ['clean'],
-          ],
-        },
-      });
-      quillRef.current = quill;
-      cursorsRef.current = quill.getModule('cursors') as QuillCursors;
+    let isSubscribed = true;
 
-      // Set initial content if it exists
-      if (doc.content) {
-        quill.setContents(doc.content);
-      }
+    let socketCleanup: (() => void) | null = null;
+
+    // 1. Initialize Quill Dynamically
+    if (!quillRef.current) {
+      Promise.all([
+        import('quill'),
+        import('quill-cursors')
+      ]).then(([QuillModule, QuillCursorsModule]) => {
+        if (!isSubscribed) return;
+
+        const Quill = QuillModule.default;
+        const QuillCursors = QuillCursorsModule.default;
+
+        if (!Quill.imports['modules/cursors']) {
+          Quill.register('modules/cursors', QuillCursors);
+        }
+
+        const quill = new Quill(editorRef.current!, {
+          theme: 'snow',
+          modules: {
+            cursors: true,
+            toolbar: [
+              [{ header: [1, 2, 3, false] }],
+              ['bold', 'italic', 'underline', 'strike'],
+              [{ list: 'ordered' }, { list: 'bullet' }],
+              ['blockquote', 'code-block'],
+              ['clean'],
+            ],
+          },
+        });
+        quillRef.current = quill;
+        cursorsRef.current = quill.getModule('cursors') as QuillCursorsType;
+
+        if (doc.content) {
+          quill.setContents(doc.content);
+        }
+
+        setupSockets(quill, cursorsRef.current);
+      });
+    } else {
+      setupSockets(quillRef.current, cursorsRef.current!);
     }
 
-    const quill = quillRef.current;
-    const cursors = cursorsRef.current;
-    const socket = getSocket();
-    socket.connect();
+    function setupSockets(quill: QuillType, cursors: QuillCursorsType) {
+      const socket = getSocket();
+      socket.connect();
 
-    // 2. Join the document room
-    const joinRoom = () => socket.emit('join-document', documentId, currentUser.id);
-    if (socket.connected) joinRoom();
-    socket.on('connect', joinRoom);
+      // 2. Join the document room
+      const joinRoom = () => socket.emit('join-document', documentId, currentUser!.id);
+      if (socket.connected) joinRoom();
+      socket.on('connect', joinRoom);
 
-    // 3. Handle incoming text changes
-    const handleReceiveChanges = (delta: any) => {
-      quill.updateContents(delta);
-    };
-    socket.on('receive-changes', handleReceiveChanges);
+      // 3. Handle incoming text changes
+      const handleReceiveChanges = (delta: any) => {
+        quill.updateContents(delta);
+      };
+      socket.on('receive-changes', handleReceiveChanges);
 
-    // 4. Handle outgoing text changes
-    const handleTextChange = (delta: any, oldDelta: any, source: string) => {
-      if (source === 'user') {
-        socket.emit('send-changes', documentId, delta);
-        debouncedSave();
-      }
-    };
-    quill.on('text-change', handleTextChange);
+      // 4. Handle outgoing text changes
+      const handleTextChange = (delta: any, oldDelta: any, source: string) => {
+        if (source === 'user') {
+          socket.emit('send-changes', documentId, delta);
+          debouncedSave();
+        }
+      };
+      quill.on('text-change', handleTextChange);
 
-    // 5. Handle cursor sync
-    const handleSelectionChange = (range: any, oldRange: any, source: string) => {
-      if (source === 'user') {
-        socket.emit('cursor-move', documentId, {
-          userId: currentUser.id,
-          name: currentUser.firstName,
-          range,
-        });
-      }
-    };
-    quill.on('selection-change', handleSelectionChange);
+      // 5. Handle cursor sync
+      const handleSelectionChange = (range: any, oldRange: any, source: string) => {
+        if (source === 'user') {
+          socket.emit('cursor-move', documentId, {
+            userId: currentUser!.id,
+            name: currentUser!.firstName,
+            range,
+          });
+        }
+      };
+      quill.on('selection-change', handleSelectionChange);
 
-    const handleCursorUpdate = (data: { userId: string, name: string, range: any }) => {
-      if (!cursors) return;
-      if (!data.range) {
-        cursors.removeCursor(data.userId);
-        return;
-      }
-      try {
-        cursors.createCursor(data.userId, data.name, '#4f46e5');
-      } catch (e) {
-        // cursor might already exist, safe to ignore
-      }
-      cursors.moveCursor(data.userId, data.range);
-    };
-    socket.on('cursor-update', handleCursorUpdate);
+      const handleCursorUpdate = (data: { userId: string, name: string, range: any }) => {
+        if (!cursors) return;
+        if (!data.range) {
+          cursors.removeCursor(data.userId);
+          return;
+        }
+        try {
+          cursors.createCursor(data.userId, data.name, '#4f46e5');
+        } catch (e) {}
+        cursors.moveCursor(data.userId, data.range);
+      };
+      socket.on('cursor-update', handleCursorUpdate);
 
-    // 6. Handle users leaving
-    const handleUserLeft = (data: { userId: string }) => {
-      cursors?.removeCursor(data.userId);
-    };
-    socket.on('user-left', handleUserLeft);
+      // 6. Handle users leaving
+      const handleUserLeft = (data: { userId: string }) => {
+        cursors?.removeCursor(data.userId);
+      };
+      socket.on('user-left', handleUserLeft);
+
+      socketCleanup = () => {
+        quill.off('text-change', handleTextChange);
+        quill.off('selection-change', handleSelectionChange);
+        socket.off('connect', joinRoom);
+        socket.off('receive-changes', handleReceiveChanges);
+        socket.off('cursor-update', handleCursorUpdate);
+        socket.off('user-left', handleUserLeft);
+        socket.emit('leave-document', documentId, currentUser!.id);
+        socket.disconnect();
+      };
+    }
 
     // Cleanup
     return () => {
-      quill.off('text-change', handleTextChange);
-      quill.off('selection-change', handleSelectionChange);
-      socket.off('connect', joinRoom);
-      socket.off('receive-changes', handleReceiveChanges);
-      socket.off('cursor-update', handleCursorUpdate);
-      socket.off('user-left', handleUserLeft);
-      socket.emit('leave-document', documentId, currentUser.id);
-      socket.disconnect();
+      isSubscribed = false;
+      if (socketCleanup) socketCleanup();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, error, doc, currentUser, documentId]);

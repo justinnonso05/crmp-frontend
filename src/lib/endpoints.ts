@@ -28,9 +28,10 @@ export const PROJECTS = {
   LIST:          `${BASE}/api/projects`,
   CREATE:        `${BASE}/api/projects`,
   DETAIL:        (id: string) => `${BASE}/api/projects/${id}`,
+  UPDATE_ETHICS: (id: string) => `${BASE}/api/projects/${id}/ethics`,
+  UPDATE_INTERNAL_STAGE: (id: string) => `${BASE}/api/projects/${id}/internal-stage`,
   ADD_MEMBER:    (id: string) => `${BASE}/api/projects/${id}/members`,
   REMOVE_MEMBER: (id: string, userId: string) => `${BASE}/api/projects/${id}/members/${userId}`,
-  UPDATE_ETHICS: (id: string) => `${BASE}/api/projects/${id}/ethics`,
   UPDATE_STATUS: (id: string) => `${BASE}/api/projects/${id}/status`,
 } as const;
 
