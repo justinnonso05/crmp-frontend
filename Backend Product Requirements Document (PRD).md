@@ -11,6 +11,7 @@
 ## 1. Product Overview
 
 The backend of the CRMP is engineered to securely manage the academic research lifecycle, process real-time collaboration events, and ensure data integrity across the platform. It serves as a decoupled, stateless REST API that powers the Next.js frontend, replacing fragmented institutional workflows with a unified, high-performance ecosystem.
+It strictly enforces a **Multi-Tenant University Ecosystem**, ensuring researchers can only collaborate within their respective universities while supporting controlled research discovery and structured proposal governance.
 
 ## 2. Architecture & Infrastructure
 
@@ -52,7 +53,9 @@ CRMP-Backend/
 │   ├── services/              # Core business logic and database queries
 │   │   ├── AuthService.ts
 │   │   ├── DocumentService.ts
-│   │   └── OutputService.ts
+│   │   ├── OutputService.ts
+│   │   ├── DiscoveryService.ts
+│   │   ├── EmailService.ts        # Brevo integration
 │   ├── sockets/               # Real-time WebSockets event handlers
 │   │   └── collaborationHandler.ts
 │   ├── utils/                 # Helper functions (password hashing, validators)
@@ -69,20 +72,15 @@ CRMP-Backend/
 
 The relational database must be optimized for data integrity and complex academic queries. All schemas are normalized to the Third Normal Form (3NF).
 
-* **User:** `id`, `email`, `passwordHash`, `firstName`, `lastName`, `createdAt`, `updatedAt`.
-* **Project:** `id`, `title`, `description`, `status`, `ethicalClearanceStatus`, `createdAt`.
-* 
-**ProjectMember:** (Join Table) `projectId`, `userId`, `role` (Enum: PI, Co-Investigator, Assistant, Reviewer).
-
-
+* **User:** `id`, `email`, `passwordHash`, `firstName`, `lastName`, `university`, `faculty`, `department`, `createdAt`, `updatedAt`.
+* **Project:** `id`, `title`, `description`, `status` (Enum/String: DRAFT to ARCHIVED), `visibility` (PRIVATE, UNIVERSITY_VISIBLE), `university` (Tenant ID), `ethicalClearanceStatus`, `createdAt`.
+* **ProjectMember:** (Join Table) `projectId`, `userId`, `role` (Enum: PI, Co-Investigator, Research Assistant, Reviewer).
+* **ProjectApplication:** `id`, `projectId`, `userId`, `role`, `status` (PENDING, APPROVED, REJECTED).
+* **Proposal:** `id`, `projectId`, `type` (COLLABORATIVE, UPLOADED), `content`, `fileUrl`, `status` (DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED).
 * **Task:** `id`, `projectId`, `assignedUserId`, `title`, `dueDate`, `isCompleted`.
 * **Document:** `id`, `projectId`, `title`, `content` (JSON/Rich Text), `lastModifiedBy`, `updatedAt`.
-* 
-**Survey:** `id`, `projectId`, `title`, `schemaJson`, `isActive`.
-
-
-* 
-**ResearchOutput:** `id`, `projectId`, `outputType` (Enum: Journal, Conference, Report), `citation`, `fileUrl`.
+* **Survey:** `id`, `projectId`, `title`, `schemaJson`, `isActive`.
+* **ResearchOutput:** `id`, `projectId`, `outputType` (Enum: Journal, Conference, Report), `citation`, `fileUrl`.
 
 
 
@@ -108,9 +106,10 @@ All endpoints (except `/api/auth/*`) require an `Authorization` header containin
 
 ---
 
-## 6. Real-Time Collaboration Service (Socket.io)
+## 6. Real-Time & Email Notifications
 
-This service manages persistent WebSocket connections to enable live document editing and dashboard updates, fulfilling the synchronization requirements without relying on SignalR.
+* **Socket.io Integration:** The backend must broadcast unified event payloads to all members in a project room (`project.updated`, `project.member.added`, `proposal.submitted`, etc.).
+* **Brevo Email API:** The `EmailService` utilizes the Brevo SDK to send HTML transactional emails asynchronously for key events (User added to project, Proposal submitted, Proposal decision, Task assigned).
 
 ### Core Socket Events
 

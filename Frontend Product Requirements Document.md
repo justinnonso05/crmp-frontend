@@ -9,15 +9,16 @@
 ## 1. Product Overview
 
 The frontend of the CRMP provides a unified, accessible, and frictionless user interface tailored to the academic research lifecycle. By leveraging Next.js, the application benefits from Server-Side Rendering (SSR) for faster initial loads and optimized routing, replacing fragmented generic tools with a purpose-built, high-performance workspace.
+It enforces strict university tenancy while enabling a secure, discovery-based ecosystem for researchers to find projects and apply for collaboration.
 
 ## 2. User Roles & Interface Access (RBAC)
 
 The UI must dynamically render components and restrict views based on the authenticated user's assigned role.
 
-* **Principal Investigator (PI):** Full administrative access to create projects, assign roles, approve outputs, and oversee compliance.
-* **Co-Investigator:** High-level access for collaborative editing, dataset management, and survey building.
-* **Research Assistant / Student:** Execution-level access for data upload, task completion, and document drafting.
-* **Reviewer:** Read-only access with specific permissions granted for document annotation and commenting.
+* **Principal Investigator (PI):** Creates and manages the project, invites team members, submits the proposal and final report, and oversees the entire research.
+* **Co-Investigator:** Collaborates with the PI, contributes to literature review, data collection, analysis, and report writing, and can edit research documents.
+* **Research Assistant / Student:** Uploads references and datasets, conducts literature searches, collects and organizes data, and assists with formatting. Cannot submit or approve the project.
+* **Reviewer/Supervisor:** Reviews the proposal, approves or requests revisions, reviews the final submission, and issues the final certification/approval.
 
 ---
 
@@ -27,23 +28,36 @@ The frontend will utilize the Next.js App Router (`/app` directory) for clean la
 
 | Route Path | File Structure | Rendering Strategy | Description |
 | --- | --- | --- | --- |
-| `/login` | `app/(auth)/login/page.tsx` | Static | Standard email/password authentication. |
-| `/register` | `app/(auth)/register/page.tsx` | Static | Account creation with role selection. |
-| `/dashboard` | `app/(dashboard)/page.tsx` | Server/Client | Grid view of assigned projects and global activity feed. |
-| `/projects/[id]` | `app/projects/[id]/page.tsx` | Server-rendered | Project-specific overview, task list, and team members. |
-| `/projects/[id]/editor` | `app/projects/[id]/editor/page.tsx` | Client Component | SignalR-backed real-time document annotation workspace. |
+| Route Path | File Structure | Rendering Strategy | Description |
+| --- | --- | --- | --- |
+| `/` | `app/page.tsx` | Server/Client | Landing page with university-scoped project discovery search. |
+| `/login` | `app/(auth)/login/page.tsx` | Server/Client | Standard email/password authentication. |
+| `/register` | `app/(auth)/register/page.tsx` | Server/Client | Account creation with University, Faculty, and Department selection. |
+| `/dashboard` | `app/(dashboard)/page.tsx` | Server/Client | Grid view of assigned projects, University Project Discovery UI, and real-time activity feed. |
+| `/projects/[id]` | `app/projects/[id]/page.tsx` | Server/Client | Project workspace featuring a unified 10-stage lifecycle UI, dynamic stage guides/recommendations, task list, and team members. |
+| `/projects/[id]/proposal` | `app/projects/[id]/proposal/page.tsx` | Server/Client | Dedicated interface to collaboratively edit or upload the project proposal and submit for review. |
+| `/projects/[id]/editor` | `app/projects/[id]/editor/page.tsx` | Client Component | Socket-backed real-time document annotation workspace. |
 | `/projects/[id]/surveys` | `app/projects/[id]/surveys/page.tsx` | Client Component | Interface to design forms and view collected responses. |
-| `/projects/[id]/outputs` | `app/projects/[id]/outputs/page.tsx` | Server/Client | Forms to log journal articles and ethical compliance. |
-| `/settings` | `app/settings/page.tsx` | Client Component | Profile management and notification preferences. |
+| `/projects/[id]/outputs` | `app/projects/[id]/outputs/page.tsx` | Server/Client | Forms to log journal articles and research outputs. |
+| `/reviewer` | `app/reviewer/page.tsx` | Server/Client | Dedicated queue for Reviewers to evaluate submitted proposals. |
 
 ---
 
 ## 4. Core Frontend Modules & Features
 
-### Authentication & Role Selection
+### Authentication & Tenancy
+* **UI Requirements:** Clean interface for secure login and registration. Registration requires selecting University, Faculty, and Department (populated via JSON lookup).
+* **Core Logic:** NextAuth.js or custom JWT management. On successful registration, users are automatically routed to the dashboard without needing to re-login.
 
-* **UI Requirements:** Clean, focused interface for secure login and registration.
-* **Core Logic:** NextAuth.js or custom JWT management via HTTP-only cookies. Clear mechanism for selecting or assigning roles upon project creation or team invitation.
+### Project Discovery & Applications
+* **UI Requirements:** Landing page search with animations returning project counts. Dashboard "Discover" section showing `UNIVERSITY_VISIBLE` projects.
+* **Core Logic:** Users can click "Apply to Collaborate" and select a role. PIs can approve requests to instantly add the user to the project, triggering real-time updates and emails.
+
+### Unified Lifecycle & Stage Guides
+* **UI Requirements:** A unified 10-stage timeline on the project page. When specific stages (like Literature Review, Report Writing) are active, contextual recommendations based on the CSC 476 syllabus are rendered to guide researchers.
+
+### Proposal Submission & Review
+* **UI Requirements:** A dedicated workflow where teams can either collaboratively write or upload a proposal. Includes a Reviewer Dashboard for supervisors to approve or reject submissions.
 
 ### Centralized Project Dashboard
 

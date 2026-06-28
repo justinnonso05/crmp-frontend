@@ -1,14 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, setToken, setUser } from '@/lib/api';
 import { AUTH } from '@/lib/endpoints';
+import { SearchableDropdown } from '@/components/SearchableDropdown';
+
+import institutionsData from '@/data/institutions.json';
+import facultiesData from '@/data/faculties.json';
 
 interface RegisterResponse {
   message: string;
-  userId: string;
+  user: Record<string, unknown>;
+  token: string;
 }
 
 const ROLE_OPTIONS = [
@@ -26,6 +31,9 @@ export default function RegisterPage() {
     email:     '',
     password:  '',
     confirm:   '',
+    university: '',
+    faculty:    '',
+    department: '',
   });
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,8 +45,8 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { firstName, lastName, email, password, confirm } = form;
-    if (!firstName || !lastName || !email || !password) {
+    const { firstName, lastName, email, password, confirm, university, faculty, department } = form;
+    if (!firstName || !lastName || !email || !password || !university || !faculty || !department) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -53,12 +61,14 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      await apiFetch<RegisterResponse>(AUTH.REGISTER, {
+      const data = await apiFetch<RegisterResponse>(AUTH.REGISTER, {
         method: 'POST',
-        body: JSON.stringify({ firstName, lastName, email, password }),
+        body: JSON.stringify({ firstName, lastName, email, password, university, faculty, department }),
       });
-      // Redirect to login with a success hint
-      router.push('/login?registered=1');
+      setToken(data.token);
+      setUser(data.user);
+      // Redirect to dashboard with a success hint
+      router.push('/dashboard?registered=1');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Registration failed.');
     } finally {
@@ -126,6 +136,40 @@ export default function RegisterPage() {
               onChange={handleChange}
               className="auth-input"
               disabled={loading}
+            />
+          </div>
+
+          {/* Tenancy fields */}
+          <SearchableDropdown
+            label="University / Institution"
+            options={institutionsData as { id: string | number; name: string }[]}
+            value={form.university}
+            onChange={(val) => setForm(prev => ({ ...prev, university: val, faculty: '', department: '' }))}
+            placeholder="Select institution"
+            disabled={loading}
+          />
+
+          <div className="auth-row">
+            <SearchableDropdown
+              label="Faculty"
+              options={facultiesData.faculties.map(f => ({ id: f.id, name: f.name }))}
+              value={form.faculty}
+              onChange={(val) => setForm(prev => ({ ...prev, faculty: val, department: '' }))}
+              placeholder="Select faculty"
+              disabled={loading || !form.university}
+            />
+
+            <SearchableDropdown
+              label="Department"
+              options={
+                form.faculty
+                  ? facultiesData.faculties.find(f => f.name === form.faculty)?.departments.map(d => ({ id: d.id, name: d.name })) || []
+                  : []
+              }
+              value={form.department}
+              onChange={(val) => setForm(prev => ({ ...prev, department: val }))}
+              placeholder="Select department"
+              disabled={loading || !form.faculty}
             />
           </div>
 

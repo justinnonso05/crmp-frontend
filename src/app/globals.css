@@ -752,6 +752,17 @@ footer {
   border-left: 2px solid #b84a2e;
 }
 
+/* Success */
+.auth-success {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: #2A7C75;
+  padding: 0.6rem 0.9rem;
+  background: rgba(42,124,117,0.07);
+  border-left: 2px solid #2A7C75;
+}
+
 /* Submit button — matches .nav-join / .btn-ink style */
 .auth-btn {
   background: var(--ink);
@@ -1295,6 +1306,43 @@ footer {
   font-size: 0.58rem;
   color: var(--ink-faint);
 }
+
+
+/* ── Workspace content cards (match proj-card style) ──────────── */
+.ws-card {
+  position: relative;
+  background: var(--paper-pin);
+  border: 1px solid rgba(26,26,24,0.08);
+  padding: 1.4rem 1.5rem 1.2rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: box-shadow 0.2s;
+}
+.ws-card--clickable {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.ws-card--clickable:hover {
+  box-shadow: var(--shadow-pin);
+}
+.ws-card--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+/* Teal top-bar accent (same as .proj-pi-bar) */
+.ws-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--teal-ink);
+}
+/* Variant without the top bar */
+.ws-card--plain::before { display: none; }
 
 /* ── Activity feed ─────────────────────────────────────────────── */
 .dash-activity-col {

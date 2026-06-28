@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, getToken } from '@/lib/api';
-import { SURVEYS } from '@/lib/endpoints';
+import { SURVEYS, PROJECTS } from '@/lib/endpoints';
 import './survey-mobile.css';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from 'recharts';
 
@@ -182,9 +182,27 @@ export default function SurveyPage() {
                 <h1 className="proj-page-title">{surveySchema?.title} - Results</h1>
                 <p className="proj-card-desc">{responses.length} responses</p>
               </div>
-              <button onClick={exportCSV} className="dash-btn-primary survey-export-btn" disabled={responses.length === 0}>
-                Export CSV
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button onClick={exportCSV} className="dash-btn-primary survey-export-btn" disabled={responses.length === 0}>
+                  Export CSV
+                </button>
+                <button
+                  onClick={async () => {
+                    if (confirm('Are you sure you want to mark Data Collection as complete? You should ensure all responses have been gathered.')) {
+                      try {
+                        await apiFetch(PROJECTS.UPDATE_STATUS(projectId), {
+                          method: 'PATCH',
+                          body: JSON.stringify({ status: 'DATA_ANALYSIS' })
+                        });
+                        router.push(`/projects/${projectId}`);
+                      } catch (e: any) { alert(e.message || 'Failed to update status'); }
+                    }
+                  }}
+                  style={{ background: '#1A1A18', color: '#F2EDE4', border: 'none', borderRadius: '6px', padding: '0.5rem 1rem', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Mark Data Collection Complete
+                </button>
+              </div>
             </div>
 
             <div style={{ marginBottom: '2rem', padding: '1rem', background: 'rgba(5,150,105,0.05)', borderRadius: '8px', border: '1px solid rgba(5,150,105,0.2)' }}>
@@ -227,9 +245,9 @@ export default function SurveyPage() {
                     )}
 
                     {(q.type === 'SHORT_TEXT' || q.type === 'LONG_TEXT') && (
-                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column' }}>
                         {responses.map((r, ri) => r.answers[q.id] && (
-                          <li key={ri} style={{ padding: '0.8rem', background: 'var(--bg-hover)', borderRadius: '6px', fontSize: '0.9rem' }}>
+                          <li key={ri} style={{ padding: '1rem 0', borderBottom: ri === responses.length - 1 ? 'none' : '1px solid rgba(26,26,24,0.1)', fontSize: '0.95rem', lineHeight: 1.6, color: 'rgba(26,26,24,0.9)' }}>
                             {r.answers[q.id]}
                           </li>
                         ))}

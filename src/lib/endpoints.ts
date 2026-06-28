@@ -28,11 +28,30 @@ export const PROJECTS = {
   LIST:          `${BASE}/api/projects`,
   CREATE:        `${BASE}/api/projects`,
   DETAIL:        (id: string) => `${BASE}/api/projects/${id}`,
-  UPDATE_ETHICS: (id: string) => `${BASE}/api/projects/${id}/ethics`,
-  UPDATE_INTERNAL_STAGE: (id: string) => `${BASE}/api/projects/${id}/internal-stage`,
+
   ADD_MEMBER:    (id: string) => `${BASE}/api/projects/${id}/members`,
   REMOVE_MEMBER: (id: string, userId: string) => `${BASE}/api/projects/${id}/members/${userId}`,
   UPDATE_STATUS: (id: string) => `${BASE}/api/projects/${id}/status`,
+} as const;
+
+// ── Proposals ─────────────────────────────────────────────────────
+export const PROPOSAL = {
+  DRAFT:  (id: string) => `${BASE}/api/projects/${id}/proposal`,
+  SUBMIT: (id: string) => `${BASE}/api/projects/${id}/proposal/submit`,
+  REVIEW: (id: string) => `${BASE}/api/projects/${id}/proposal/review`,
+} as const;
+
+// ── Applications ──────────────────────────────────────────────────
+export const APPLICATIONS = {
+  LIST:   (projectId: string) => `${BASE}/api/projects/${projectId}/applications`,
+  REVIEW: (appId: string)     => `${BASE}/api/applications/${appId}`,
+} as const;
+
+// ── Discovery ─────────────────────────────────────────────────────
+export const DISCOVERY = {
+  SEARCH_COUNT: (query: string) => `${BASE}/api/discover/search/count?q=${encodeURIComponent(query)}`,
+  UNIVERSITY: `${BASE}/api/discover/university`,
+  APPLY: (id: string) => `${BASE}/api/discover/apply/${id}`,
 } as const;
 
 // ── Tasks ─────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, getUser, getToken } from '@/lib/api';
-import { PROJECTS, TASKS, DOCUMENTS, SURVEYS, OUTPUTS, UPLOAD } from '@/lib/endpoints';
+import { PROJECTS, TASKS, DOCUMENTS, SURVEYS, OUTPUTS, UPLOAD, PROPOSAL, APPLICATIONS } from '@/lib/endpoints';
 import { Trash2 } from 'lucide-react';
 import '../../../project-mobile.css';
 import { getSocket } from '@/lib/socket';
@@ -22,27 +22,232 @@ interface Document { id: string; title: string; updatedAt: string; lastModifiedB
 interface Survey   { id: string; title: string; isActive: boolean; createdAt: string; }
 interface Output   { id: string; outputType: string; citation: string; fileUrl?: string; createdAt: string; }
 interface Project {
-  id: string; title: string; description: string;
-  status: string; internalStage: string; ethicalClearanceStatus: string; createdAt: string;
+  id: string; title: string; description: string; researchTopic: string;
+  status: string; createdAt: string;
   members: Member[]; tasks: Task[];
-  ethicalClearanceNumber?: string;
-  ethicalApprovalDate?: string;
-  ethicalExpiryDate?: string;
-  ethicalClearanceDocumentUrl?: string;
   documents?: Document[];
   surveys?: Survey[];
   outputs?: Output[];
+  proposal?: { id: string; content: string; status: string; fileUrl: string; updatedAt: string };
 }
 
-type Tab = 'tasks' | 'documents' | 'surveys' | 'outputs' | 'members' | 'ethics';
+interface Application {
+  id: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  user: { id: string; firstName: string; lastName: string; email: string; faculty?: string; university?: string };
+}
+
+type Tab = 'proposal' | 'tasks' | 'documents' | 'surveys' | 'outputs' | 'members';
 
 const ROLE_LABELS: Record<string, string> = {
   PI: 'Principal Investigator', CO_INVESTIGATOR: 'Co-Investigator',
   ASSISTANT: 'Research Assistant', REVIEWER: 'Reviewer',
 };
-const ETHICS_LABELS: Record<string, string> = {
-  PENDING: 'Pending', APPROVED: 'Approved', REJECTED: 'Rejected', EXEMPT: 'Exempt',
-};
+
+function StageGuide({ 
+  project, canEditStatus, onAdvanceStatus, myRole,
+  onBuildSurvey, onDocumentQualitative, onRequestConfirm, statusUpdating,
+  onWriteReport, onUploadReport
+}: { 
+  project: Project, canEditStatus: boolean, onAdvanceStatus: (s: string) => void, myRole: string,
+  onBuildSurvey?: () => void, onDocumentQualitative?: () => void, onRequestConfirm?: (msg: string, onConfirm: () => void) => void, statusUpdating?: boolean,
+  onWriteReport?: () => void, onUploadReport?: () => void
+}) {
+  const [dataColChoice, setDataColChoice] = useState<'SURVEY' | 'EXTERNAL' | null>(null);
+  const [reportChoice, setReportChoice] = useState<'DOCUMENT' | 'UPLOAD' | null>(null);
+
+  if (!project) return null;
+
+  const guides: Record<string, { title: string, desc: string, action?: string, nextStage?: string }> = {
+    DRAFT: {
+      title: 'Drafting Proposal',
+      desc: 'Use the Proposal tab to draft your research intent. Choose to write it collaboratively using the document editor, or upload an existing file.'
+    },
+    PROPOSAL_SUBMITTED: {
+      title: 'Proposal Submitted',
+      desc: 'Your proposal is currently under review by the assigned Reviewer. You cannot edit the proposal while it is under review.',
+    },
+    PROPOSAL_APPROVED: {
+      title: 'Proposal Approved — Begin Literature Review',
+      desc: 'Your proposal has been approved. Conduct a thorough literature review and summarise your references in the Documents tab.',
+      action: 'Begin Literature Review', nextStage: 'LITERATURE_REVIEW'
+    },
+    LITERATURE_REVIEW: {
+      title: 'Literature Review in Progress',
+      desc: 'Cover all fundamental research and theoretical frameworks. Once your review is fully documented, advance to Data Collection.',
+      action: 'Finish Literature Review', nextStage: 'DATA_COLLECTION'
+    },
+    DATA_COLLECTION: {
+      title: 'Data Collection Phase',
+      desc: 'Gather your research data using either inbuilt surveys (Quantitative) or external interviews/observations (Qualitative).'
+    },
+    DATA_ANALYSIS: {
+      title: 'Data Analysis',
+      desc: 'Analyse your collected data, discuss findings with your team, and prepare for the final report.',
+      action: 'Finish Data Analysis', nextStage: 'REPORT_WRITING'
+    },
+    REPORT_WRITING: {
+      title: 'Report Writing',
+      desc: 'Draft the final manuscript or report based on your analysis and literature review.',
+      action: 'Submit Final Report', nextStage: 'FINAL_SUBMISSION'
+    },
+    FINAL_SUBMISSION: {
+      title: 'Final Submission',
+      desc: 'Your final report has been submitted for certification.',
+    },
+    CERTIFICATION: {
+      title: 'Certification',
+      desc: 'The project is under final review for academic certification.',
+      action: 'Certify Project', nextStage: 'COMPLETED'
+    },
+    COMPLETED: {
+      title: 'Project Completed',
+      desc: 'This project has been fully certified and archived.'
+    }
+  };
+
+  const guide = guides[project.status];
+  if (!guide) return null;
+
+  return (
+    <div className="ws-card ws-card--plain" style={{ marginBottom: '1.75rem', flexDirection: 'row', alignItems: 'flex-start', gap: '1rem' }}>
+      {/* Teal icon dot */}
+      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#2A7C75', marginTop: '0.35rem', flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#1A1A18', marginBottom: '0.35rem' }}>{guide.title}</h3>
+        <p style={{ fontSize: '0.8125rem', color: 'rgba(26,26,24,0.65)', lineHeight: 1.6, marginBottom: guide.action || project.status === 'DATA_COLLECTION' ? '1rem' : 0 }}>{guide.desc}</p>
+
+        {/* DATA_COLLECTION: two-choice card */}
+        {project.status === 'DATA_COLLECTION' && myRole !== 'REVIEWER' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {(['SURVEY', 'EXTERNAL'] as const).map(choice => (
+                <button
+                  key={choice}
+                  onClick={() => setDataColChoice(choice)}
+                  style={{
+                    flex: '1 1 200px',
+                    padding: '0.875rem 1rem',
+                    borderRadius: '8px',
+                    border: `1.5px solid ${dataColChoice === choice ? '#2A7C75' : 'rgba(26,26,24,0.15)'}`,
+                    background: dataColChoice === choice ? 'rgba(42,124,117,0.08)' : 'rgba(255,255,255,0.6)',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1A1A18', marginBottom: '0.2rem' }}>
+                    {choice === 'SURVEY' ? 'Quantitative (Inbuilt Survey)' : 'Qualitative (External / Interviews)'}
+                  </h4>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(26,26,24,0.55)' }}>
+                    {choice === 'SURVEY'
+                      ? 'Use the Surveys tab to build and distribute forms for numerical data.'
+                      : 'Conduct interviews, focus groups, or field observations outside the platform.'}
+                  </p>
+                </button>
+              ))}
+            </div>
+            {dataColChoice && (
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                {dataColChoice === 'SURVEY' && onBuildSurvey && (
+                  <button onClick={onBuildSurvey} className="dash-btn-primary">
+                    + Build Survey
+                  </button>
+                )}
+                {dataColChoice === 'EXTERNAL' && onDocumentQualitative && (
+                  <button onClick={onDocumentQualitative} className="dash-btn-primary">
+                    + Document Qualitative Data
+                  </button>
+                )}
+                {onRequestConfirm && (
+                  <button
+                    disabled={statusUpdating}
+                    style={{ opacity: statusUpdating ? 0.7 : 1, background: '#1A1A18', color: '#F2EDE4', border: 'none', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: statusUpdating ? 'not-allowed' : 'pointer' }}
+                    onClick={() => onRequestConfirm('Are you sure you want to mark Data Collection as complete? You should ensure all responses and qualitative data have been gathered.', () => onAdvanceStatus('DATA_ANALYSIS'))}
+                  >
+                    {statusUpdating ? 'Updating...' : 'Mark Data Collection Complete'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* REPORT_WRITING: two-choice card */}
+        {project.status === 'REPORT_WRITING' && myRole !== 'REVIEWER' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              {(['DOCUMENT', 'UPLOAD'] as const).map(choice => (
+                <button
+                  key={choice}
+                  onClick={() => setReportChoice(choice)}
+                  style={{
+                    flex: '1 1 200px',
+                    padding: '0.875rem 1rem',
+                    borderRadius: '8px',
+                    border: `1.5px solid ${reportChoice === choice ? '#2A7C75' : 'rgba(26,26,24,0.15)'}`,
+                    background: reportChoice === choice ? 'rgba(42,124,117,0.08)' : 'rgba(255,255,255,0.6)',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <h4 style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#1A1A18', marginBottom: '0.2rem' }}>
+                    {choice === 'DOCUMENT' ? 'Write Collaboratively' : 'Upload Finished Report'}
+                  </h4>
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(26,26,24,0.55)' }}>
+                    {choice === 'DOCUMENT'
+                      ? 'Open the real-time editor to draft the report with your team.'
+                      : 'Upload a completed PDF or Word document into Research Outputs.'}
+                  </p>
+                </button>
+              ))}
+            </div>
+            {reportChoice && (
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                {reportChoice === 'DOCUMENT' && onWriteReport && (
+                  <button onClick={onWriteReport} className="dash-btn-primary">
+                    + Write Collaboratively
+                  </button>
+                )}
+                {reportChoice === 'UPLOAD' && onUploadReport && (
+                  <button onClick={onUploadReport} className="dash-btn-primary">
+                    + Upload Final Report
+                  </button>
+                )}
+                {onRequestConfirm && (
+                  <button
+                    disabled={statusUpdating}
+                    style={{ opacity: statusUpdating ? 0.7 : 1, background: '#1A1A18', color: '#F2EDE4', border: 'none', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: statusUpdating ? 'not-allowed' : 'pointer' }}
+                    onClick={() => onRequestConfirm('Are you sure you want to submit the final report? Make sure your team has finished drafting or uploading it.', () => onAdvanceStatus('FINAL_SUBMISSION'))}
+                  >
+                    {statusUpdating ? 'Updating...' : 'Submit Final Report'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {project.status !== 'DATA_COLLECTION' && project.status !== 'REPORT_WRITING' && guide.action && guide.nextStage && (
+          (guide.nextStage === 'COMPLETED' ? myRole === 'REVIEWER' : myRole !== 'REVIEWER') && (
+            <button
+              disabled={statusUpdating}
+              style={{ opacity: statusUpdating ? 0.7 : 1, background: '#1A1A18', color: '#F2EDE4', border: 'none', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: statusUpdating ? 'not-allowed' : 'pointer' }}
+              onClick={() => onAdvanceStatus(guide.nextStage!)}
+            >
+              {statusUpdating ? 'Updating...' : `${guide.action} →`}
+            </button>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 const OUTPUT_LABELS: Record<string, string> = {
   JOURNAL: 'Journal', CONFERENCE: 'Conference', REPORT: 'Report',
 };
@@ -56,23 +261,19 @@ export default function ProjectPage() {
   const [project, setProject]         = useState<Project | null>(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
-  const [tab, setTab]                 = useState<Tab>('tasks');
+  const [tab, setTab]                 = useState<Tab>('proposal');
 
   /* ── per-tab data ── */
+  const [proposalMode, setProposalMode] = useState<'choose' | 'document' | 'upload'>('choose');
+  const [proposalUploading, setProposalUploading] = useState(false);
+  const [proposalUploadFile, setProposalUploadFile] = useState<File | null>(null);
+  const [proposalSaving, setProposalSaving] = useState(false);
   const [tasks,     setTasks]     = useState<Task[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [surveys,   setSurveys]   = useState<Survey[]>([]);
   const [outputs,   setOutputs]   = useState<Output[]>([]);
 
-  // Ethics Tab State
-  const [ethicalStatus, setEthicalStatus] = useState('PENDING');
-  const [ethicalNumber, setEthicalNumber] = useState('');
-  const [ethicalApprovalDate, setEthicalApprovalDate] = useState('');
-  const [ethicalExpiryDate, setEthicalExpiryDate] = useState('');
-  const [ethicalDocUrl, setEthicalDocUrl] = useState('');
-  const [ethicalDocFile, setEthicalDocFile] = useState<File | null>(null);
-  const [savingEthics, setSavingEthics] = useState(false);
-  const [ethicsErr, setEthicsErr] = useState('');
+
 
   /* ── task modal ── */
   const [showTaskModal,  setShowTaskModal]  = useState(false);
@@ -88,6 +289,10 @@ export default function ProjectPage() {
   const [memberRole,      setMemberRole]      = useState('ASSISTANT');
   const [memberErr,       setMemberErr]       = useState('');
   const [savingMember,    setSavingMember]    = useState(false);
+
+  /* ── applications (PI view) ── */
+  const [applications,     setApplications]     = useState<Application[]>([]);
+  const [reviewingApp,     setReviewingApp]     = useState<string | null>(null);
 
   /* ── document modal ── */
   const [showDocModal, setShowDocModal] = useState(false);
@@ -106,6 +311,8 @@ export default function ProjectPage() {
   /* ── alert & confirm modals ── */
   const [alertMessage, setAlertMessage] = useState('');
   const [confirmState, setConfirmState] = useState<{ message: string, onConfirm: () => void } | null>(null);
+  const [showHints, setShowHints] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   /* ─── mount: auth + user ─── */
   useEffect(() => {
@@ -119,11 +326,10 @@ export default function ProjectPage() {
     apiFetch<{ project: Project }>(PROJECTS.DETAIL(id))
       .then(d => {
         setProject(d.project);
-        setEthicalStatus(d.project.ethicalClearanceStatus || 'PENDING');
-        setEthicalNumber(d.project.ethicalClearanceNumber || '');
-        setEthicalApprovalDate(d.project.ethicalApprovalDate ? new Date(d.project.ethicalApprovalDate).toISOString().split('T')[0] : '');
-        setEthicalExpiryDate(d.project.ethicalExpiryDate ? new Date(d.project.ethicalExpiryDate).toISOString().split('T')[0] : '');
-        setEthicalDocUrl(d.project.ethicalClearanceDocumentUrl || '');
+        // If proposal already has a file or document, skip the 'choose' screen
+        if (d.project.proposal?.fileUrl) setProposalMode('upload');
+        else if (d.project.proposal?.content) setProposalMode('document');
+
         setLoading(false);
       })
       .catch(e => {
@@ -144,16 +350,67 @@ export default function ProjectPage() {
   /* ─── Status Update Handlers ─── */
   async function handleUpdateStatus(newStatus: string) {
     if (!project) return;
+    setStatusUpdating(true);
     try {
+      if (newStatus === 'LITERATURE_REVIEW' && project.status !== 'LITERATURE_REVIEW') {
+        const dDoc = await apiFetch<{ document: any }>(DOCUMENTS.CREATE(id), {
+          method: 'POST',
+          body: JSON.stringify({ title: 'Literature Review' }),
+        });
+        const d = await apiFetch<{ project: Project }>(PROJECTS.UPDATE_STATUS(id), {
+          method: 'PATCH',
+          body: JSON.stringify({ status: newStatus }),
+        });
+        setProject(d.project);
+        router.push(`/projects/${id}/editor?doc=${dDoc.document.id}`);
+        return;
+      }
+
       const d = await apiFetch<{ project: Project }>(PROJECTS.UPDATE_STATUS(id), {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
       });
       setProject(d.project);
     } catch (e: any) { setAlertMessage(e.message || 'Failed to update status'); }
+    finally { setStatusUpdating(false); }
   }
 
   useEffect(() => { fetchAllTabData(); }, [fetchAllTabData]);
+
+  /* ─── Fetch pending applications (PI only, when members tab active) ─── */
+  const fetchApplications = useCallback(() => {
+    if (!id) return;
+    apiFetch<{ applications: Application[] }>(APPLICATIONS.LIST(id))
+      .then(d => setApplications(d.applications))
+      .catch(() => setApplications([]));
+  }, [id]);
+
+  useEffect(() => {
+    const myRole = project?.members.find(m => m.userId === currentUser?.id)?.role ?? '';
+    if (tab === 'members' && myRole === 'PI') fetchApplications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, project, currentUser]);
+
+  /* ─── Approve / Reject application ─── */
+  async function handleReviewApplication(appId: string, decision: 'APPROVED' | 'REJECTED') {
+    setReviewingApp(appId);
+    try {
+      await apiFetch(APPLICATIONS.REVIEW(appId), {
+        method: 'PATCH',
+        body: JSON.stringify({ decision, projectId: id }),
+      });
+      // Remove from list + re-fetch project members if approved
+      setApplications(prev => prev.filter(a => a.id !== appId));
+      if (decision === 'APPROVED') {
+        const d = await apiFetch<{ project: Project }>(PROJECTS.DETAIL(id));
+        setProject(d.project);
+      }
+    } catch (e: any) {
+      setAlertMessage(e.message || 'Failed to process application.');
+    } finally {
+      setReviewingApp(null);
+    }
+  }
 
   /* ─── socket: join project room ─── */
   useEffect(() => {
@@ -173,24 +430,12 @@ export default function ProjectPage() {
   }, [id, currentUser]);
 
   /* ─── derived ─── */
-  const myRole    = project?.members.find(m => m.userId === currentUser?.id)?.role ?? '';
-  async function handleUpdateInternalStage(newStage: string) {
-    if (!id || !project) return;
-    try {
-      await apiFetch(PROJECTS.UPDATE_INTERNAL_STAGE(id as string), {
-        method: 'PATCH',
-        body: JSON.stringify({ stage: newStage }),
-      });
-      setProject({ ...project, internalStage: newStage });
-      setAlertMessage('Internal stage updated successfully.');
-    } catch (e: unknown) {
-      setAlertMessage(e instanceof Error ? e.message : 'Failed to update internal stage.');
-    }
-  }
+  const myRole    = project?.members?.find((m: any) => m.userId === currentUser?.id)?.role ?? '';
+  /* ─── internal stage removed ─── */
 
   const isPI = myRole === 'PI';
   const isReviewer = myRole === 'REVIEWER';
-  const canEditStatus = isPI || isReviewer;
+  const canEditStatus = isPI;
   const canEdit = isPI || myRole === 'CO_INVESTIGATOR';
   const canWrite  = canEdit || myRole === 'ASSISTANT';
 
@@ -206,6 +451,66 @@ export default function ProjectPage() {
       metadata
     };
     socket.emit('broadcast-activity', payload);
+  }
+
+  /* ─── proposal actions ─── */
+  async function handleCreateProposalDocument() {
+    setProposalSaving(true);
+    try {
+      // Create a document titled "Research Proposal" and navigate to editor
+      const d = await apiFetch<{ document: Document }>(DOCUMENTS.CREATE(id), {
+        method: 'POST',
+        body: JSON.stringify({ title: 'Research Proposal' }),
+      });
+      broadcastActivity('DOC_CREATED', 'Research Proposal document created', undefined, { docTitle: 'Research Proposal', initiatorName: currentUser?.firstName });
+      router.push(`/projects/${id}/editor?doc=${d.document.id}`);
+    } catch (e: any) { setAlertMessage(e.message || 'Failed to create proposal document.'); }
+    finally { setProposalSaving(false); }
+  }
+
+  async function handleUploadProposal(e: React.FormEvent) {
+    e.preventDefault();
+    if (!proposalUploadFile) return;
+    setProposalUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', proposalUploadFile);
+      const uploadRes = await apiFetch<{ fileUrl: string }>(UPLOAD.FILE, { method: 'POST', body: formData });
+      // Save fileUrl to the proposal record
+      const d = await apiFetch<any>(PROPOSAL.DRAFT(id), {
+        method: 'POST',
+        body: JSON.stringify({ type: 'file', fileUrl: uploadRes.fileUrl }),
+      });
+      setProject(p => p ? { ...p, proposal: d.proposal } : p);
+      setAlertMessage('Proposal file uploaded successfully.');
+      broadcastActivity('PROPOSAL_UPLOADED', 'Proposal file uploaded');
+    } catch (e: any) { setAlertMessage(e.message || 'Failed to upload proposal.'); }
+    finally { setProposalUploading(false); }
+  }
+
+  async function handleSubmitProposal() {
+    setProposalSaving(true);
+    try {
+      const d = await apiFetch<any>(PROPOSAL.SUBMIT(id), { method: 'POST' });
+      setProject(p => p ? { ...p, proposal: d.proposal, status: 'PROPOSAL_SUBMITTED' } : p);
+      setAlertMessage('Proposal submitted for review.');
+      broadcastActivity('PROPOSAL_SUBMITTED', 'Proposal submitted for review');
+    } catch (e: any) { setAlertMessage(e.message || 'Failed to submit proposal.'); }
+    finally { setProposalSaving(false); }
+  }
+
+  async function handleReviewProposal(decision: 'APPROVE' | 'REVISE') {
+    setProposalSaving(true);
+    try {
+      const d = await apiFetch<any>(PROPOSAL.REVIEW(id), {
+        method: 'POST',
+        body: JSON.stringify({ decision }),
+      });
+      setProject(p => p ? { ...p, proposal: d.proposal, status: decision === 'APPROVE' ? 'PROPOSAL_APPROVED' : 'REVISION_REQUIRED' } : p);
+      setAlertMessage(`Proposal ${decision === 'APPROVE' ? 'approved' : 'sent back for revision'}.`);
+      broadcastActivity(`PROPOSAL_${decision}`, `Proposal was ${decision === 'APPROVE' ? 'approved' : 'returned for revision'} by a reviewer`);
+    } catch (e: any) { setAlertMessage(e.message || 'Failed to submit review.'); }
+    finally { setProposalSaving(false); }
   }
 
   /* ─── task actions ─── */
@@ -312,44 +617,12 @@ export default function ProjectPage() {
         body: JSON.stringify({ outputType: outType, citation: outCitation.trim(), fileUrl }),
       });
       setOutputs(prev => [d.output, ...prev]);
-      broadcastActivity('OUTPUT_LOGGED', `Output logged: ${outType}`, undefined, { outType, initiatorName: currentUser?.firstName });
+      broadcastActivity('OUTPUT_LOGGED', `Output logged: ${outType}`, undefined, { outType, outputTitle: outCitation.trim(), initiatorName: currentUser?.firstName });
       setShowOutputModal(false); setOutCitation(''); setOutFile(null); setOutType('JOURNAL');
     } catch (e: unknown) { setOutErr(e instanceof Error ? e.message : 'Failed.'); }
     finally { setSavingOut(false); }
   }
 
-  /* ─── ethics actions ─── */
-  async function updateEthicsDetails(e: React.FormEvent) {
-    e.preventDefault();
-    setSavingEthics(true); setEthicsErr('');
-    try {
-      let fileUrl = ethicalDocUrl;
-      if (ethicalDocFile) {
-        const formData = new FormData();
-        formData.append('file', ethicalDocFile);
-        const uploadRes = await apiFetch<{ fileUrl: string }>(UPLOAD.FILE, {
-          method: 'POST',
-          body: formData,
-        });
-        fileUrl = uploadRes.fileUrl;
-        setEthicalDocUrl(fileUrl);
-      }
-
-      await apiFetch(PROJECTS.UPDATE_ETHICS(id as string), {
-        method: 'PATCH',
-        body: JSON.stringify({ 
-          status: ethicalStatus,
-          ethicalClearanceNumber: ethicalNumber,
-          ethicalClearanceDocumentUrl: fileUrl,
-          ethicalApprovalDate: ethicalApprovalDate || null,
-          ethicalExpiryDate: ethicalExpiryDate || null
-        }),
-      });
-      setProject(p => p ? { ...p, ethicalClearanceStatus: ethicalStatus as any, ethicalClearanceNumber: ethicalNumber, ethicalClearanceDocumentUrl: fileUrl, ethicalApprovalDate: ethicalApprovalDate, ethicalExpiryDate: ethicalExpiryDate } : null);
-      setAlertMessage('Ethics details updated successfully.');
-    } catch (e: unknown) { setEthicsErr(e instanceof Error ? e.message : 'Failed.'); }
-    finally { setSavingEthics(false); }
-  }
 
   /* ─── render guards ─── */
   if (loading) return (
@@ -377,44 +650,28 @@ export default function ProjectPage() {
         <div className="proj-page-header-left">
           <div className="proj-page-badges" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Status:</span>
-              {canEditStatus ? (
-                <select 
-                  className={`proj-badge badge--${project.status.toLowerCase()}`} 
-                  value={project.status} 
-                  onChange={e => handleUpdateStatus(e.target.value)}
-                  style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto' }}
-                >
-                  <option value="DRAFT">DRAFT</option>
-                  <option value="PENDING">PENDING</option>
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="COMPLETED">COMPLETED</option>
-                  <option value="ARCHIVED">ARCHIVED</option>
-                </select>
-              ) : (
-                <span className={`proj-badge badge--${project.status.toLowerCase()}`}>{project.status}</span>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Stage:</span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Project Lifecycle Stage:</span>
               {canEditStatus ? (
                 <select 
                   className={`proj-badge`} 
-                  value={project.internalStage || 'PROPOSAL'} 
-                  onChange={e => handleUpdateInternalStage(e.target.value)}
+                  value={project.status} 
+                  onChange={e => handleUpdateStatus(e.target.value)}
                   style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto', background: 'var(--bg-hover)', color: 'var(--text)' }}
                 >
-                  <option value="PROPOSAL">PROPOSAL</option>
-                  <option value="ETHICS_REVIEW">ETHICS REVIEW</option>
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="PROPOSAL_SUBMITTED">PROPOSAL SUBMITTED</option>
+                  <option value="PROPOSAL_APPROVED">PROPOSAL APPROVED</option>
+                  <option value="LITERATURE_REVIEW">LITERATURE REVIEW</option>
                   <option value="DATA_COLLECTION">DATA COLLECTION</option>
                   <option value="DATA_ANALYSIS">DATA ANALYSIS</option>
-                  <option value="INTERNAL_REVIEW">INTERNAL REVIEW</option>
-                  <option value="PUBLISHED">PUBLISHED</option>
+                  <option value="REPORT_WRITING">REPORT WRITING</option>
+                  <option value="FINAL_SUBMISSION">FINAL SUBMISSION</option>
+                  <option value="CERTIFICATION">CERTIFICATION</option>
+                  <option value="COMPLETED">COMPLETED</option>
                 </select>
               ) : (
                 <span className={`proj-badge`} style={{ background: 'var(--bg-hover)', color: 'var(--text)' }}>
-                  {(project.internalStage || 'PROPOSAL').replace('_', ' ')}
+                  {project.status.replace(/_/g, ' ')}
                 </span>
               )}
             </div>
@@ -422,6 +679,7 @@ export default function ProjectPage() {
             <span className="proj-role-chip" style={{ marginLeft: 'auto' }}>{ROLE_LABELS[myRole] ?? myRole}</span>
           </div>
           <h1 className="proj-page-title">{project.title}</h1>
+          <p style={{ fontSize: '0.8125rem', color: '#2A7C75', fontWeight: 500, letterSpacing: '0.01em', marginBottom: '0.15rem' }}>{project.researchTopic}</p>
           <p className="proj-page-desc">{project.description}</p>
         </div>
         <div className="proj-page-header-right">
@@ -432,9 +690,43 @@ export default function ProjectPage() {
         </div>
       </div>
 
+      {/* ── Stage Guide & Interactive Lifecycle ── */}
+      <StageGuide 
+        project={project} 
+        canEditStatus={canEditStatus} 
+        onAdvanceStatus={(nextStatus) => handleUpdateStatus(nextStatus)} 
+        myRole={myRole}
+        onBuildSurvey={() => router.push(`/projects/${id}/surveys`)}
+        onDocumentQualitative={async () => {
+          try {
+            const dDoc = await apiFetch<{ document: any }>(DOCUMENTS.CREATE(id), {
+              method: 'POST',
+              body: JSON.stringify({ title: 'Qualitative Data' }),
+            });
+            router.push(`/projects/${id}/editor?doc=${dDoc.document.id}`);
+          } catch (e: any) { setAlertMessage(e.message || 'Failed to create document'); }
+        }}
+        onRequestConfirm={(msg, onConfirm) => setConfirmState({ message: msg, onConfirm })}
+        statusUpdating={statusUpdating}
+        onWriteReport={async () => {
+          try {
+            const dDoc = await apiFetch<{ document: any }>(DOCUMENTS.CREATE(id), {
+              method: 'POST',
+              body: JSON.stringify({ title: 'Final Report' }),
+            });
+            router.push(`/projects/${id}/editor?doc=${dDoc.document.id}`);
+          } catch (e: any) { setAlertMessage(e.message || 'Failed to create document'); }
+        }}
+        onUploadReport={() => {
+          setOutType('REPORT');
+          setShowOutputModal(true);
+          setTab('outputs');
+        }}
+      />
+
       {/* ── Tabs ── */}
       <div className="proj-tabs" style={{ flexWrap: 'wrap' }}>
-        {(['tasks', 'documents', 'surveys', 'outputs', 'members', 'ethics'] as Tab[]).map(t => (
+        {(['proposal', 'tasks', 'documents', 'surveys', 'outputs', 'members'] as Tab[]).map(t => (
           <button
             key={t}
             className={`proj-tab ${tab === t ? 'proj-tab--active' : ''}`}
@@ -447,6 +739,128 @@ export default function ProjectPage() {
 
       {/* ── Tab content ── */}
       <div className="proj-tab-content">
+
+        {/* ════ PROPOSAL ════ */}
+        {tab === 'proposal' && (
+          <div>
+            <div className="proj-tab-head">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h2 className="proj-tab-title">Project Proposal</h2>
+                <button onClick={() => setShowHints(true)} className="dash-btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>💡 Proposal Guidelines</button>
+              </div>
+              {project.proposal && (
+                <span style={{
+                  fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  padding: '0.2rem 0.6rem', borderRadius: '4px',
+                  background: project.proposal.status === 'APPROVED' ? 'rgba(42,124,117,0.12)' : 'rgba(26,26,24,0.08)',
+                  color: project.proposal.status === 'APPROVED' ? '#2A7C75' : 'rgba(26,26,24,0.55)',
+                }}>
+                  {project.proposal.status.replace('_', ' ')}
+                </span>
+              )}
+            </div>
+
+            {/* Reviewer actions */}
+            {isReviewer && project.proposal?.status === 'SUBMITTED' && (
+              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                <button
+                  style={{ opacity: proposalSaving ? 0.7 : 1, background: 'rgba(42,124,117,0.1)', color: '#2A7C75', border: '1px solid rgba(42,124,117,0.3)', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: proposalSaving ? 'not-allowed' : 'pointer' }}
+                  onClick={() => handleReviewProposal('APPROVE')} disabled={proposalSaving}
+                >{proposalSaving ? 'Saving...' : 'Approve Proposal'}</button>
+                <button
+                  style={{ opacity: proposalSaving ? 0.7 : 1, background: 'rgba(220,38,38,0.06)', color: 'rgb(185,28,28)', border: '1px solid rgba(220,38,38,0.25)', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: proposalSaving ? 'not-allowed' : 'pointer' }}
+                  onClick={() => handleReviewProposal('REVISE')} disabled={proposalSaving}
+                >{proposalSaving ? 'Saving...' : 'Request Revision'}</button>
+              </div>
+            )}
+
+            {/* Uploaded file view */}
+            {project.proposal?.fileUrl && (
+              <div className="ws-card ws-card--row" style={{ marginBottom: '1rem', gap: '1rem' }}>
+                <div>
+                  <p className="proj-card-title" style={{ fontSize: '0.9rem' }}>Uploaded Proposal File</p>
+                  <p className="proj-ethics" style={{ marginTop: '0.2rem' }}>Last updated {formatDateTime(project.proposal.updatedAt)}</p>
+                </div>
+                <a href={project.proposal.fileUrl} target="_blank" rel="noopener" className="dash-btn-primary" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }}>View File →</a>
+              </div>
+            )}
+
+            {/* Choose mode (only when no proposal exists and can write) */}
+            {!project.proposal && canWrite && proposalMode === 'choose' && (
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                <button
+                  onClick={() => setProposalMode('document')}
+                  className="ws-card ws-card--clickable"
+                  style={{ flex: '1 1 220px' }}
+                >
+                  <p className="proj-card-title" style={{ fontSize: '0.95rem', marginBottom: '0.3rem' }}>✏️ Write Collaboratively</p>
+                  <p className="proj-card-desc">Open the real-time document editor and co-author the proposal with your team.</p>
+                </button>
+                <button
+                  onClick={() => setProposalMode('upload')}
+                  className="ws-card ws-card--clickable"
+                  style={{ flex: '1 1 220px' }}
+                >
+                  <p className="proj-card-title" style={{ fontSize: '0.95rem', marginBottom: '0.3rem' }}>📎 Upload Existing File</p>
+                  <p className="proj-card-desc">Already have a proposal? Upload a PDF or Word document directly.</p>
+                </button>
+              </div>
+            )}
+
+            {/* Write mode: open editor */}
+            {proposalMode === 'document' && !project.proposal?.fileUrl && (
+              <div className="ws-card">
+                <p className="proj-card-desc" style={{ lineHeight: 1.7 }}>
+                  {documents.some(d => d.title.toLowerCase().includes('proposal'))
+                    ? (project.proposal?.status === 'SUBMITTED' || project.proposal?.status === 'APPROVED' 
+                        ? 'Review the submitted proposal document below.' 
+                        : 'Open the drafted proposal document below to continue editing.')
+                    : 'Click below to open the real-time collaborative document editor. A document titled Research Proposal will be created and linked to this project.'}
+                </p>
+                {/* Show existing proposal docs if any */}
+                {documents.filter(d => d.title.toLowerCase().includes('proposal')).map(doc => (
+                  <div key={doc.id} className="ws-card ws-card--row ws-card--plain" style={{ marginBottom: '0.5rem' }}>
+                    <div>
+                      <p className="proj-card-title" style={{ fontSize: '0.9rem' }}>{doc.title}</p>
+                      <p className="proj-ethics" style={{ marginTop: '0.1rem' }}>Last edited {formatDateTime(doc.updatedAt)}</p>
+                    </div>
+                    <a href={`/projects/${id}/editor?doc=${doc.id}`} className="dash-btn-primary" style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}>Open →</a>
+                  </div>
+                ))}
+                {canWrite && project.proposal?.status !== 'SUBMITTED' && project.proposal?.status !== 'APPROVED' && !documents.some(d => d.title.toLowerCase().includes('proposal')) && (
+                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.25rem' }}>
+                    <button onClick={handleCreateProposalDocument} disabled={proposalSaving} className="dash-btn-primary">
+                      {proposalSaving ? 'Creating…' : '+ Create Proposal Document'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Upload mode */}
+            {proposalMode === 'upload' && canWrite && (
+              <form onSubmit={handleUploadProposal} className="ws-card">
+                <p className="proj-card-desc" style={{ lineHeight: 1.7 }}>
+                  Upload your proposal as a PDF or Word document. Once uploaded, you can submit it for review.
+                </p>
+                <div className="auth-field">
+                  <label className="auth-label">Proposal File (PDF / DOCX)</label>
+                  <input className="auth-input" type="file" accept=".pdf,.doc,.docx" onChange={e => setProposalUploadFile(e.target.files?.[0] || null)} disabled={proposalUploading} />
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                  <button type="submit" disabled={!proposalUploadFile || proposalUploading} className="dash-btn-primary" style={{ opacity: proposalUploadFile ? 1 : 0.45 }}>
+                    {proposalUploading ? 'Uploading…' : 'Upload Proposal'}
+                  </button>
+                  {project.proposal?.fileUrl && (
+                    <button type="button" onClick={handleSubmitProposal} disabled={proposalSaving} className="dash-btn-ghost">
+                      Submit for Review
+                    </button>
+                  )}
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
         {/* ════ TASKS ════ */}
         {tab === 'tasks' && (
@@ -530,10 +944,11 @@ export default function ProjectPage() {
               {canEdit && (
                 <button 
                   onClick={() => {
-                    if (ethicalStatus === 'APPROVED' || ethicalStatus === 'NOT_REQUIRED') {
+                    const allowedStages = ['DATA_COLLECTION', 'DATA_ANALYSIS', 'REPORT_WRITING', 'FINAL_SUBMISSION', 'CERTIFICATION', 'COMPLETED'];
+                    if (allowedStages.includes(project.status)) {
                       router.push(`/projects/${id}/surveys`);
                     } else {
-                      setAlertMessage('Ethical clearance must be APPROVED or NOT REQUIRED before you can build surveys and collect data. Please update the Ethical Clearance Status in the Ethics tab.');
+                      setAlertMessage('Your project must reach the DATA COLLECTION stage before you can build surveys.');
                     }
                   }} 
                   className="dash-btn-primary"
@@ -611,6 +1026,58 @@ export default function ProjectPage() {
                 </button>
               )}
             </div>
+
+            {/* ── Pending Applications (PI only) ── */}
+            {isPI && applications.length > 0 && (
+              <div style={{ marginBottom: '2rem' }}>
+                <p className="proj-role" style={{ marginBottom: '0.75rem', letterSpacing: '0.08em' }}>
+                  Collaboration Requests ({applications.length})
+                </p>
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', listStyle: 'none' }}>
+                  {applications.map(app => (
+                    <li key={app.id} className="ws-card ws-card--plain ws-card--row" style={{ gap: '1rem', padding: '1rem 1.25rem' }}>
+                      {/* Avatar */}
+                      <div className="member-avatar" style={{ flexShrink: 0 }}>
+                        {app.user.firstName[0]}{app.user.lastName[0]}
+                      </div>
+                      {/* Info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p className="member-name">{app.user.firstName} {app.user.lastName}</p>
+                        <p className="member-email">{app.user.email}</p>
+                        <p className="proj-ethics" style={{ marginTop: '0.2rem' }}>
+                          Applied as <strong>{ROLE_LABELS[app.role] ?? app.role}</strong> · {formatDate(app.createdAt)}
+                        </p>
+                      </div>
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                        <button
+                          className="dash-btn-primary"
+                          style={{ padding: '0.3rem 0.85rem', fontSize: '0.75rem' }}
+                          disabled={reviewingApp === app.id}
+                          onClick={() => handleReviewApplication(app.id, 'APPROVED')}
+                        >
+                          {reviewingApp === app.id ? '…' : 'Approve'}
+                        </button>
+                        <button
+                          className="dash-btn-ghost"
+                          style={{ padding: '0.3rem 0.85rem', fontSize: '0.75rem', color: 'var(--error)' }}
+                          disabled={reviewingApp === app.id}
+                          onClick={() => handleReviewApplication(app.id, 'REJECTED')}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {isPI && applications.length === 0 && (
+              <p className="proj-ethics" style={{ marginBottom: '1.5rem' }}>No pending collaboration requests.</p>
+            )}
+
+            {/* ── Active Members ── */}
             <ul className="member-list">
               {project.members.map(m => (
                 <li key={m.userId} className="member-item">
@@ -624,9 +1091,9 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }} className="member-item-actions">
                     <span className="member-role">{ROLE_LABELS[m.role] ?? m.role}</span>
                     {isPI && m.userId !== currentUser?.id && (
-                      <button 
+                      <button
                         onClick={() => handleRemoveMember(m.userId, `${m.user.firstName} ${m.user.lastName}`)}
-                        className="dash-btn-ghost" 
+                        className="dash-btn-ghost"
                         style={{ color: 'var(--error)', padding: '0.25rem 0.5rem' }}
                       >
                         Remove
@@ -639,64 +1106,31 @@ export default function ProjectPage() {
           </div>
         )}
 
-        {/* ════ ETHICS ════ */}
-        {tab === 'ethics' && (
-          <div>
-            <div className="proj-tab-head">
-              <h2 className="proj-tab-title">Ethics &amp; Compliance</h2>
-            </div>
-            
-            <form onSubmit={updateEthicsDetails} className="dash-card" style={{ padding: '2rem', maxWidth: '600px' }}>
-              <Field label="Ethical Clearance Status" id="ethics-status">
-                <select id="ethics-status" className="auth-input auth-select" value={ethicalStatus} onChange={e => setEthicalStatus(e.target.value)} disabled={!canEditStatus || savingEthics}>
-                  <option value="NOT_REQUIRED">Not Required / Exempt</option>
-                  <option value="PENDING">Pending (Not Submitted)</option>
-                  <option value="UNDER_REVIEW">Under Review</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="EXPIRED">Expired</option>
-                </select>
-              </Field>
-
-              <Field label="Clearance Number / ID" id="ethics-num">
-                <input id="ethics-num" type="text" className="auth-input" value={ethicalNumber} onChange={e => setEthicalNumber(e.target.value)} disabled={!canEditStatus || savingEthics} placeholder="e.g. IRB-2026-001" />
-              </Field>
-
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Approval Date" id="ethics-approve-date">
-                    <input id="ethics-approve-date" type="date" className="auth-input" value={ethicalApprovalDate} onChange={e => setEthicalApprovalDate(e.target.value)} disabled={!canEditStatus || savingEthics} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Expiry Date" id="ethics-expiry-date">
-                    <input id="ethics-expiry-date" type="date" className="auth-input" value={ethicalExpiryDate} onChange={e => setEthicalExpiryDate(e.target.value)} disabled={!canEditStatus || savingEthics} />
-                  </Field>
-                </div>
-              </div>
-
-              <Field label="Ethical Clearance Document (PDF/Word)" id="ethics-doc">
-                {ethicalDocUrl && (
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    <a href={ethicalDocUrl} target="_blank" rel="noopener noreferrer" className="dash-btn-ghost" style={{ padding: '0.2rem 0.5rem', display: 'inline-block' }}>View Current Document</a>
-                  </div>
-                )}
-                <input id="ethics-doc" type="file" className="auth-input" onChange={e => setEthicalDocFile(e.target.files?.[0] || null)} disabled={!canEditStatus || savingEthics} accept=".pdf,.doc,.docx" />
-              </Field>
-
-              {ethicsErr && <p className="auth-error" style={{ marginBottom: '1rem' }}>{ethicsErr}</p>}
-              
-              {canEditStatus && (
-                <button type="submit" className="dash-btn-primary" disabled={savingEthics}>
-                  {savingEthics ? 'Saving...' : 'Save Ethics Details'}
-                </button>
-              )}
-            </form>
-          </div>
-        )}
       </div>
 
       {/* ════ MODALS ════ */}
+
+      {/* Hints Modal */}
+      {showHints && (
+        <Modal title="Proposal Guidelines" onClose={() => setShowHints(false)}>
+          <div style={{ lineHeight: 1.6, fontSize: '0.9rem', color: 'var(--ink)', maxHeight: '60vh', overflowY: 'auto', paddingRight: '1rem' }}>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              <li><strong>Title:</strong> A clear, concise statement of the research topic.</li>
+              <li><strong>Abstract:</strong> A brief summary (150-250 words) covering objectives, methodology, and expected outcomes.</li>
+              <li><strong>Introduction & Background:</strong> Contextualise the problem and state why it is significant.</li>
+              <li><strong>Statement of the Problem:</strong> Clearly define the specific issue the research will address.</li>
+              <li><strong>Objectives:</strong> List primary and secondary research goals.</li>
+              <li><strong>Literature Review:</strong> Summarise existing research and identify the gap this project fills.</li>
+              <li><strong>Methodology:</strong> Describe the study design, data collection methods (e.g. surveys, interviews), and analysis techniques.</li>
+              <li><strong>Timeline & Budget:</strong> A brief projection of project milestones and estimated costs.</li>
+              <li><strong>References:</strong> Cite all sources using standard academic formatting (APA, IEEE, etc.).</li>
+            </ol>
+          </div>
+          <ModalActions>
+            <button type="button" className="dash-btn-primary" onClick={() => setShowHints(false)}>Got it</button>
+          </ModalActions>
+        </Modal>
+      )}
 
       {/* Task modal */}
       {showTaskModal && (
@@ -846,7 +1280,11 @@ export default function ProjectPage() {
               </button>
               <button 
                 className="dash-btn-primary" 
-                onClick={confirmState.onConfirm}
+                onClick={() => {
+                  const onConfirm = confirmState.onConfirm;
+                  setConfirmState(null);
+                  onConfirm();
+                }}
               >
                 Confirm
               </button>

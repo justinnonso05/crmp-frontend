@@ -4,54 +4,60 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch, getUser, removeToken, setUser } from '@/lib/api';
 import { USERS } from '@/lib/endpoints';
+import { SearchableDropdown } from '@/components/SearchableDropdown';
+
+import institutionsData from '@/data/institutions.json';
+import facultiesData from '@/data/faculties.json';
 
 interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
+  university?: string;
+  faculty?: string;
+  department?: string;
 }
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setLocalUser] = useState<User | null>(null);
-  
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [user, setLocalUser]        = useState<User | null>(null);
+  const [firstName, setFirstName]   = useState('');
+  const [lastName, setLastName]     = useState('');
+  const [university, setUniversity] = useState('');
+  const [faculty, setFaculty]       = useState('');
+  const [department, setDepartment] = useState('');
+  const [saving, setSaving]         = useState(false);
+  const [message, setMessage]       = useState('');
+  const [error, setError]           = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
     const u = getUser<User>();
-    if (!u) {
-      router.replace('/login');
-      return;
-    }
+    if (!u) { router.replace('/login'); return; }
     setLocalUser(u);
-    setFirstName(u.firstName);
-    setLastName(u.lastName);
+    setFirstName(u.firstName ?? '');
+    setLastName(u.lastName ?? '');
+    setUniversity(u.university ?? '');
+    setFaculty(u.faculty ?? '');
+    setDepartment(u.department ?? '');
   }, [router]);
 
   async function handleUpdateProfile(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
-    setMessage('');
-    setError('');
-    
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('First and last name are required.');
+      return;
+    }
+    setSaving(true); setMessage(''); setError('');
     try {
       const res = await apiFetch<{ user: User }>(USERS.PROFILE, {
         method: 'PUT',
-        body: JSON.stringify({ firstName, lastName })
+        body: JSON.stringify({ firstName, lastName, university, faculty, department }),
       });
       setUser(res.user);
       setLocalUser(res.user);
       setMessage('Profile updated successfully.');
-      // Force a soft refresh to update layout avatar
-      window.location.reload();
     } catch (err: any) {
       setError(err.message || 'Failed to update profile.');
     } finally {
@@ -59,16 +65,10 @@ export default function ProfilePage() {
     }
   }
 
-  async function handleDeactivate() {
-    setShowConfirmModal(true);
-  }
-
   async function proceedDeactivate() {
-    setShowConfirmModal(false);
+    setShowConfirm(false);
     try {
-      await apiFetch(USERS.PROFILE, {
-        method: 'DELETE'
-      });
+      await apiFetch(USERS.PROFILE, { method: 'DELETE' });
       removeToken();
       window.location.href = '/login';
     } catch (err: any) {
@@ -76,95 +76,142 @@ export default function ProfilePage() {
     }
   }
 
+  const departmentOptions =
+    faculty
+      ? facultiesData.faculties.find(f => f.name === faculty)?.departments.map(d => ({ id: d.id, name: d.name })) ?? []
+      : [];
+
   if (!user) return null;
 
   return (
-    <div className="dash-container" style={{ maxWidth: '600px', margin: '2rem auto' }}>
-      <h1 className="proj-title">Your Profile</h1>
-      
-      <div className="dash-card" style={{ marginTop: '2rem' }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>Personal Information</h2>
-        <form onSubmit={handleUpdateProfile} className="auth-form">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-            <label className="auth-label">Email Address (Read-only)</label>
-            <input className="auth-input" type="email" value={user.email} disabled style={{ opacity: 0.7 }} />
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-            <label className="auth-label">First Name</label>
-            <input 
-              className="auth-input" 
-              type="text" 
-              value={firstName} 
-              onChange={e => setFirstName(e.target.value)} 
-              required
+    <div style={{ padding: '0.75rem 1.5rem 2rem', display: 'flex', justifyContent: 'center' }}>
+      <div className="auth-card auth-card--wide" style={{ maxWidth: '560px', width: '100%' }}>
+
+        {/* Header */}
+        <div className="auth-header">
+          <p className="auth-eyebrow">Account</p>
+          <h1 className="auth-title">Your Profile</h1>
+          <p className="auth-subtitle">Update your personal information and institution details.</p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleUpdateProfile} className="auth-form" noValidate>
+
+          {/* Email — read only */}
+          <div className="auth-field">
+            <label htmlFor="profile-email" className="auth-label">Email address (read-only)</label>
+            <input
+              id="profile-email"
+              className="auth-input"
+              type="email"
+              value={user.email}
+              disabled
+              style={{ opacity: 0.6 }}
             />
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-            <label className="auth-label">Last Name</label>
-            <input 
-              className="auth-input" 
-              type="text" 
-              value={lastName} 
-              onChange={e => setLastName(e.target.value)} 
-              required
+
+          {/* Name row */}
+          <div className="auth-row">
+            <div className="auth-field">
+              <label htmlFor="profile-firstname" className="auth-label">First name</label>
+              <input
+                id="profile-firstname"
+                className="auth-input"
+                type="text"
+                placeholder="Ada"
+                value={firstName}
+                onChange={e => { setFirstName(e.target.value); setError(''); }}
+                disabled={saving}
+              />
+            </div>
+            <div className="auth-field">
+              <label htmlFor="profile-lastname" className="auth-label">Last name</label>
+              <input
+                id="profile-lastname"
+                className="auth-input"
+                type="text"
+                placeholder="Lovelace"
+                value={lastName}
+                onChange={e => { setLastName(e.target.value); setError(''); }}
+                disabled={saving}
+              />
+            </div>
+          </div>
+
+          {/* University */}
+          <SearchableDropdown
+            label="University / Institution"
+            options={institutionsData as { id: string | number; name: string }[]}
+            value={university}
+            onChange={val => { setUniversity(val); setFaculty(''); setDepartment(''); }}
+            placeholder="Select institution"
+            disabled={saving}
+          />
+
+          {/* Faculty + Department */}
+          <div className="auth-row">
+            <SearchableDropdown
+              label="Faculty"
+              options={facultiesData.faculties.map(f => ({ id: f.id, name: f.name }))}
+              value={faculty}
+              onChange={val => { setFaculty(val); setDepartment(''); }}
+              placeholder="Select faculty"
+              disabled={saving || !university}
+            />
+            <SearchableDropdown
+              label="Department"
+              options={departmentOptions}
+              value={department}
+              onChange={setDepartment}
+              placeholder="Select department"
+              disabled={saving || !faculty}
             />
           </div>
-          
-          {error && <p className="auth-error">{error}</p>}
-          {message && <p style={{ color: 'var(--primary)', fontSize: '0.9rem' }}>{message}</p>}
-          
-          <button type="submit" className="dash-btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : 'Update Profile'}
+
+          {error   && <p className="auth-error">{error}</p>}
+          {message && <p className="auth-success">{message}</p>}
+
+          <button
+            type="submit"
+            className="auth-btn"
+            disabled={saving}
+            id="profile-submit"
+          >
+            {saving ? 'Saving…' : 'Save changes →'}
           </button>
         </form>
+
+        {/* Danger zone */}
+        <div className="auth-form" style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(26,26,24,0.1)' }}>
+          <p className="auth-eyebrow" style={{ color: 'rgba(185,28,28,0.8)', marginBottom: '0.5rem' }}>Danger zone</p>
+          <p className="auth-subtitle" style={{ marginBottom: '1rem' }}>
+            Deactivating your account will immediately log you out. Your data will be preserved to protect ongoing projects.
+          </p>
+          <button
+            type="button"
+            className="auth-btn"
+            onClick={() => setShowConfirm(true)}
+            style={{ background: 'transparent', color: 'rgb(185,28,28)', border: '1px solid rgba(185,28,28,0.4)' }}
+          >
+            Deactivate Account
+          </button>
+        </div>
       </div>
 
-      <div className="dash-card" style={{ 
-        marginTop: '3rem', 
-        padding: '1.5rem',
-        border: '1px solid rgba(220, 38, 38, 0.3)',
-        backgroundColor: 'rgba(220, 38, 38, 0.03)',
-        borderRadius: '8px'
-      }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem', color: 'var(--error)', fontWeight: 600 }}>Danger Zone</h2>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.5 }}>
-          Deactivating your account will immediately log you out and block future access. Your data will remain to preserve ongoing collaborative projects.
-        </p>
-        <button 
-          onClick={handleDeactivate} 
-          className="dash-btn-ghost" 
-          style={{ 
-            color: 'var(--error)', 
-            borderColor: 'rgba(220, 38, 38, 0.3)',
-            backgroundColor: 'transparent',
-            padding: '0.5rem 1rem',
-            transition: 'all 0.2s'
-          }}
-          onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(220, 38, 38, 0.1)'}
-          onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-          Deactivate Account
-        </button>
-      </div>
-
-      {/* ── Custom Confirm Modal ── */}
-      {showConfirmModal && (
+      {/* Confirm deactivation modal */}
+      {showConfirm && (
         <div className="dash-modal-overlay">
           <div className="dash-modal">
             <h3 className="dash-modal-title">Deactivate Account</h3>
             <p style={{ marginBottom: '1.5rem', color: 'var(--text-muted)' }}>
-              Are you absolutely sure you want to deactivate your account? You will lose access to all projects immediately.
+              Are you absolutely sure? You will lose access to all your projects immediately.
             </p>
             <div className="dash-modal-actions">
-              <button className="dash-btn-ghost" onClick={() => setShowConfirmModal(false)}>
-                Cancel
-              </button>
-              <button 
-                className="dash-btn-primary" 
+              <button className="dash-btn-ghost" onClick={() => setShowConfirm(false)}>Cancel</button>
+              <button
+                className="auth-btn"
                 onClick={proceedDeactivate}
-                style={{ backgroundColor: 'var(--error)' }}
+                style={{ background: 'rgb(185,28,28)', border: 'none' }}
               >
                 Yes, Deactivate
               </button>

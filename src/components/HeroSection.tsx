@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/api';
+import { DISCOVERY } from '@/lib/endpoints';
 
 const HERO_NAMES = [
   'Dr. A. Okafor', 'Prof. S. Lohmann', 'J. Mensah', 'Dr. Y. Tanaka',
@@ -9,7 +11,7 @@ const HERO_NAMES = [
   'Dr. B. Costa', 'S. Nakamura', 'Dr. F. Müller', 'T. Ibrahim',
 ];
 
-const TAGS = ['Real-Time Editing', 'Survey Builder', 'Task Manager', 'Ethical Clearance', 'Research Outputs'];
+const TAGS = ['AI in Healthcare', 'Sustainable Energy', 'Quantum Computing', 'Educational Psychology', 'Urban Planning'];
 
 type CanvasNode = {
   x: number; y: number;
@@ -22,23 +24,27 @@ type CanvasNode = {
   name: string; active: boolean; pulsing: boolean; pulseT: number;
 };
 
-// Exposed so search button can trigger wave
-let nodesRef: CanvasNode[] = [];
-
-function triggerSearchWave() {
-  if (!nodesRef.length) return;
-  // From a random "broadcast" node, cascade pulses outward
-  const origin = nodesRef[Math.floor(Math.random() * nodesRef.length)];
-  nodesRef.forEach((n, i) => {
-    const dist = Math.hypot(n.x - origin.x, n.y - origin.y);
-    const delay = dist * 2.2; // ms delay proportional to distance
-    setTimeout(() => { n.pulsing = true; n.pulseT = 0; }, delay);
-  });
-}
-
 export default function HeroSection() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const nodesRef = useRef<CanvasNode[]>([]);
+  const [searchResult, setSearchResult] = useState<{ query: string; count: number } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const triggerSearchWave = () => {
+    const nodes = nodesRef.current;
+    if (!nodes.length) return;
+    const origin = nodes[Math.floor(Math.random() * nodes.length)];
+    const delays = nodes.map(n => Math.hypot(n.x - origin.x, n.y - origin.y) * 2.2);
+    delays.forEach((delay, i) => {
+      setTimeout(() => { 
+        if (nodes[i]) {
+          nodes[i].pulsing = true; 
+          nodes[i].pulseT = 0; 
+        }
+      }, delay);
+    });
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,13 +60,28 @@ export default function HeroSection() {
 
     function init() {
       const rect = canvas!.getBoundingClientRect();
-      W = canvas!.width = Math.round(rect.width) || 600;
-      H = canvas!.height = Math.round(rect.height) || 600;
-      if (W < 10 || H < 10) return;
-      nodesRef = [];
+      const newW = Math.round(rect.width) || 600;
+      const newH = Math.round(rect.height) || 600;
+      if (newW < 10 || newH < 10) return;
+      
+      // If canvas already has nodes, just update dims and clamp positions
+      if (nodesRef.current.length > 0) {
+        if (W !== newW || H !== newH) {
+          W = canvas!.width = newW;
+          H = canvas!.height = newH;
+          nodesRef.current.forEach(n => {
+            n.x = Math.max(8, Math.min(W - 8, n.x));
+            n.y = Math.max(8, Math.min(H - 8, n.y));
+          });
+        }
+        return;
+      }
+
+      W = canvas!.width = newW;
+      H = canvas!.height = newH;
       const count = Math.max(14, Math.min(22, Math.floor(W * H / 12000)));
       for (let i = 0; i < count; i++) {
-        nodesRef.push({
+        nodesRef.current.push({
           x: 40 + Math.random() * (W - 80),
           y: 40 + Math.random() * (H - 80),
           // Sine-driven velocity — unique phase/freq per node
@@ -84,7 +105,7 @@ export default function HeroSection() {
 
     function draw(t: number) {
       ctx.clearRect(0, 0, W, H);
-      const nodes = nodesRef;
+      const nodes = nodesRef.current;
       const maxDist = 160;
 
       // Hover detection
@@ -202,9 +223,9 @@ export default function HeroSection() {
     const onDown = (e: MouseEvent) => {
       const rect = canvas!.getBoundingClientRect();
       const ex = e.clientX - rect.left, ey = e.clientY - rect.top;
-      for (let i = 0; i < nodesRef.length; i++) {
-        if (Math.hypot(ex - nodesRef[i].x, ey - nodesRef[i].y) < nodesRef[i].baseR + 10) {
-          dragIdx = i; dragOffX = ex - nodesRef[i].x; dragOffY = ey - nodesRef[i].y; break;
+      for (let i = 0; i < nodesRef.current.length; i++) {
+        if (Math.hypot(ex - nodesRef.current[i].x, ey - nodesRef.current[i].y) < nodesRef.current[i].baseR + 10) {
+          dragIdx = i; dragOffX = ex - nodesRef.current[i].x; dragOffY = ey - nodesRef.current[i].y; break;
         }
       }
     };
@@ -212,8 +233,8 @@ export default function HeroSection() {
       const rect = canvas!.getBoundingClientRect();
       hMouse.x = e.clientX - rect.left; hMouse.y = e.clientY - rect.top;
       if (dragIdx >= 0) {
-        nodesRef[dragIdx].x = hMouse.x - dragOffX;
-        nodesRef[dragIdx].y = hMouse.y - dragOffY;
+        nodesRef.current[dragIdx].x = hMouse.x - dragOffX;
+        nodesRef.current[dragIdx].y = hMouse.y - dragOffY;
         // No vx/vy to zero — sine motion resumes naturally on release
       }
     };
@@ -222,14 +243,14 @@ export default function HeroSection() {
     const onClick = (e: MouseEvent) => {
       const rect = canvas!.getBoundingClientRect();
       const ex = e.clientX - rect.left, ey = e.clientY - rect.top;
-      for (let i = 0; i < nodesRef.length; i++) {
-        if (Math.hypot(ex - nodesRef[i].x, ey - nodesRef[i].y) < nodesRef[i].baseR + 12) {
+      for (let i = 0; i < nodesRef.current.length; i++) {
+        if (Math.hypot(ex - nodesRef.current[i].x, ey - nodesRef.current[i].y) < nodesRef.current[i].baseR + 12) {
           // Click a node → cascade out from it
-          nodesRef[i].pulsing = true; nodesRef[i].pulseT = 0;
-          for (let j = 0; j < nodesRef.length; j++) {
+          nodesRef.current[i].pulsing = true; nodesRef.current[i].pulseT = 0;
+          for (let j = 0; j < nodesRef.current.length; j++) {
             if (j === i) continue;
-            const delay = 1.8 * Math.hypot(nodesRef[j].x - nodesRef[i].x, nodesRef[j].y - nodesRef[i].y);
-            setTimeout(() => { nodesRef[j].pulsing = true; nodesRef[j].pulseT = 0; }, delay);
+            const delay = 1.8 * Math.hypot(nodesRef.current[j].x - nodesRef.current[i].x, nodesRef.current[j].y - nodesRef.current[i].y);
+            setTimeout(() => { nodesRef.current[j].pulsing = true; nodesRef.current[j].pulseT = 0; }, delay);
           }
           break;
         }
@@ -260,9 +281,25 @@ export default function HeroSection() {
     if (inputRef.current) { inputRef.current.value = text; inputRef.current.focus(); }
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
+    const q = inputRef.current?.value.trim();
+    if (!q) return;
+    
     // Trigger wave animation through all nodes from random origin
     triggerSearchWave();
+    setIsSearching(true);
+    setSearchResult(null);
+
+    try {
+      // Allow the animation to play out briefly before showing results
+      await new Promise(r => setTimeout(r, 600));
+      const data = await apiFetch<{ count: number }>(DISCOVERY.SEARCH_COUNT(q));
+      setSearchResult({ query: q, count: data.count });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   return (
@@ -280,16 +317,30 @@ export default function HeroSection() {
           A unified workspace for the full academic research lifecycle — manage projects, collaborate in real time, survey participants, and publish outputs.
         </p>
 
-        <div className="hero-search-row">
+        <div className="hero-search-row relative">
           <input
             ref={inputRef}
             type="text"
             id="hero-input"
             placeholder="Search a project, researcher, or field…"
             onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+            disabled={isSearching}
           />
-          <button type="button" onClick={handleSearch}>Search</button>
+          <button type="button" onClick={handleSearch} disabled={isSearching}>
+            {isSearching ? 'Searching...' : 'Search'}
+          </button>
         </div>
+
+        {searchResult && (
+          <div className="mt-6 p-4 border rounded-xl animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ borderColor: 'rgba(42,124,117,0.3)', backgroundColor: 'rgba(42,124,117,0.05)' }}>
+            <h3 className="text-lg font-medium mb-1" style={{ color: '#1A1A18' }}>
+              Found <span style={{ color: '#2A7C75', fontWeight: 'bold' }}>{searchResult.count}</span> public projects matching &quot;{searchResult.query}&quot;
+            </h3>
+            <p className="text-sm" style={{ color: 'rgba(26,26,24,0.7)' }}>
+              Register and verify your university email to join these projects and collaborate.
+            </p>
+          </div>
+        )}
 
         <div className="hero-tags">
           {TAGS.map(tag => (
