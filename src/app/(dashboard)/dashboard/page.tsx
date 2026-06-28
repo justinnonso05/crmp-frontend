@@ -312,7 +312,6 @@ export default function DashboardPage() {
                   transition: 'color 0.2s, border-color 0.2s',
                   background: 'none',
                   border: 'none',
-                  borderBottom: activeTab === 'MY_PROJECTS' ? '2px solid #2A7C75' : '2px solid transparent',
                   cursor: 'pointer',
                 }}
               >
@@ -330,7 +329,6 @@ export default function DashboardPage() {
                   transition: 'color 0.2s, border-color 0.2s',
                   background: 'none',
                   border: 'none',
-                  borderBottom: activeTab === 'DISCOVER' ? '2px solid #2A7C75' : '2px solid transparent',
                   cursor: 'pointer',
                 }}
               >
