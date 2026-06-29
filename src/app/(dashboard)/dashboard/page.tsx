@@ -199,6 +199,7 @@ export default function DashboardPage() {
       projects.forEach(p => {
         socket.emit('join-project', p.id, currentUser.id);
       });
+      socket.emit('join-user', currentUser.id);
     };
 
     if (socket.connected) {
@@ -206,16 +207,28 @@ export default function DashboardPage() {
     }
     socket.on('connect', joinRooms);
 
+    const onProjectAdded = async () => {
+      // Re-fetch projects
+      try {
+        const data = await apiFetch<{ projects: Project[] }>(PROJECTS.LIST);
+        setProjects(data.projects);
+      } catch (e) {
+        console.error('Failed to update projects', e);
+      }
+    };
+
     const handler = (payload: ActivityItem) => {
       setActivity(prev => [payload, ...prev].slice(0, 50));
     };
 
     socket.on('receive-activity', handler);
+    socket.on('project-added', onProjectAdded);
 
     return () => {
       projects.forEach(p => socket.emit('leave-project', p.id, currentUser.id));
       socket.off('connect', joinRooms);
       socket.off('receive-activity', handler);
+      socket.off('project-added', onProjectAdded);
       socket.disconnect();
     };
   }, [projects, currentUser]);

@@ -118,9 +118,11 @@ export default function CollaborativeEditorPage() {
 
         const member = project.members?.find((m: any) => m.userId === currentUser.id);
         const canWrite = member && ['PI', 'CO_INVESTIGATOR', 'ASSISTANT'].includes(member.role);
-        const isLocked = project.proposal?.status === 'SUBMITTED' || project.proposal?.status === 'APPROVED';
+        // Only lock the editor for the proposal document specifically when it's under review
+        const isProposalDoc = doc.title?.toLowerCase().includes('proposal');
+        const proposalLocked = isProposalDoc && (project.proposal?.status === 'SUBMITTED' || project.proposal?.status === 'APPROVED');
 
-        if (!canWrite || isLocked) {
+        if (!canWrite || proposalLocked) {
           quill.disable();
         }
 
@@ -305,44 +307,140 @@ export default function CollaborativeEditorPage() {
                 {doc?.title?.toLowerCase().includes('literature') ? 'Literature Review Guide' : doc?.title?.toLowerCase().includes('qualitative') || doc?.title?.toLowerCase().includes('data') ? 'Data Collection Guide' : doc?.title?.toLowerCase().includes('report') ? 'Report Writing Guide' : 'Proposal Guidelines'}
               </h2>
             </div>
-            <div style={{ lineHeight: 1.6, fontSize: '0.9rem', color: 'rgba(26,26,24,0.8)', maxHeight: '60vh', overflowY: 'auto' }}>
+            <div style={{ lineHeight: 1.7, fontSize: '0.9rem', color: 'rgba(26,26,24,0.8)', maxHeight: '65vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
               {doc?.title?.toLowerCase().includes('literature') ? (
-                <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', listStyleType: 'disc' }}>
-                  <li><strong>Introduction:</strong> Define the scope, context, and purpose of your review.</li>
-                  <li><strong>Theoretical Framework:</strong> Discuss the core theories or models that support your study.</li>
-                  <li><strong>Methodological Review:</strong> Evaluate how previous researchers have approached this problem.</li>
-                  <li><strong>Identification of Gaps:</strong> Clearly state what is missing, contradictory, or unresolved in the current literature. This justifies your project!</li>
-                  <li><strong>Conclusion & Transition:</strong> Summarise your findings and smoothly transition into your own project's proposed methodology.</li>
-                </ul>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <p style={{ margin: 0, padding: '0.75rem 1rem', background: 'rgba(42,124,117,0.07)', borderLeft: '3px solid #2A7C75', borderRadius: '0 4px 4px 0', fontSize: '0.8rem' }}>
+                    Your literature review (Chapter 2) should be grounded in <strong>recent works (last 3 years preferred)</strong>. Paraphrase — do not copy verbatim. Give due credit to all cited authors.
+                  </p>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1A1A18' }}>Required Sections</strong>
+                    <ol style={{ paddingLeft: '1.4rem', marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                      <li><strong>2.1 Conceptual Framework:</strong> Present the conceptual model of the study with explanation of linkages between key concepts.</li>
+                      <li><strong>2.2 Theoretical Framework:</strong> Review the major theory/theories related to the topic and indicate their relevance to your study.</li>
+                      <li><strong>2.3 Empirical Studies:</strong> Abstract-like review of related works — state the purpose, sample &amp; sampling technique, instruments, analysis method, and major findings.</li>
+                      <li><strong>2.4 Appraisal of Reviewed Literature:</strong> Summarise the literature and clearly state the gap that justifies your own study.</li>
+                      <li><strong>Summary Table</strong> (end of chapter): Authors &amp; Year · Title · Methodology · Results · Strength(s) · Research Gap.</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1A1A18' }}>AI Tools to Assist</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li><a href="https://www.perplexity.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Perplexity AI</a> — AI-powered research search with citations</li>
+                      <li><a href="https://elicit.com" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Elicit</a> — extracts key findings from academic papers automatically</li>
+                      <li><a href="https://www.semanticscholar.org" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Semantic Scholar</a> — AI-enhanced academic search engine</li>
+                      <li><a href="https://consensus.app" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Consensus</a> — search research papers by research question</li>
+                      <li><a href="https://scite.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Scite.ai</a> — shows how papers cite others (supporting or contrasting)</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#1A1A18' }}>External Resources</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li><a href="https://scholar.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Google Scholar</a></li>
+                      <li><a href="https://ieeexplore.ieee.org" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>IEEE Xplore</a></li>
+                      <li><a href="https://www.researchgate.net" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>ResearchGate</a></li>
+                      <li><a href="https://www.sciencedirect.com" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>ScienceDirect</a></li>
+                      <li><a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>PubMed</a> (health/biomedical)</li>
+                      <li><a href="https://dl.acm.org" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>ACM Digital Library</a> (computing)</li>
+                    </ul>
+                  </div>
+                </div>
+              ) : doc?.title?.toLowerCase().includes('analysis') ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <p style={{ margin: 0, padding: '0.75rem 1rem', background: 'rgba(42,124,117,0.07)', borderLeft: '3px solid #2A7C75', borderRadius: '0 4px 4px 0', fontSize: '0.8rem' }}>
+                    Choose analysis techniques appropriate to your research domain. Use this document to record your process, tools, outputs, and interpretation.
+                  </p>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI / ML Research</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li>AUC-ROC Curve, Confusion Matrix, Precision, Recall, F1-Score</li>
+                      <li>Mean Absolute Error (MAE), RMSE for regression tasks</li>
+                      <li>BLEU / ROUGE scores for NLP/text generation tasks</li>
+                      <li>Cross-validation (k-fold), train/test split ratios</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Software / HCI Research</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li><a href="https://www.usability.gov/how-to-and-tools/methods/system-usability-scale.html" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>SUS (System Usability Scale)</a> — 10-item usability questionnaire</li>
+                      <li><a href="https://en.wikipedia.org/wiki/Technology_acceptance_model" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>TAM (Technology Acceptance Model)</a></li>
+                      <li>UTAUT / UTAUT2 for technology adoption studies</li>
+                      <li>Heuristic Evaluation, Think-Aloud Protocol</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Social / Survey Research</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li>Descriptive Statistics (mean, median, standard deviation)</li>
+                      <li>Inferential Statistics: t-test, ANOVA, Chi-square, Regression</li>
+                      <li>Thematic Analysis for qualitative interviews</li>
+                      <li>Likert scale aggregation and frequency tables</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Analysis Tools</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li><a href="https://www.python.org" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Python</a> (pandas, scikit-learn, matplotlib)</li>
+                      <li><a href="https://www.r-project.org" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>R / RStudio</a></li>
+                      <li><a href="https://www.ibm.com/spss" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>IBM SPSS</a></li>
+                      <li><a href="https://colab.research.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Google Colab</a> (free GPU notebooks)</li>
+                    </ul>
+                  </div>
+                </div>
               ) : doc?.title?.toLowerCase().includes('qualitative') || doc?.title?.toLowerCase().includes('data') ? (
-                <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', listStyleType: 'disc' }}>
-                  <li><strong>Date & Time:</strong> Record when the data collection occurred.</li>
-                  <li><strong>Setting / Context:</strong> Describe the environment where the interview or observation took place.</li>
-                  <li><strong>Participant Info:</strong> Provide relevant, anonymous demographic details of the participant(s).</li>
-                  <li><strong>Key Responses:</strong> Transcribe or comprehensively summarise the most important answers or observed behaviors.</li>
-                  <li><strong>Researcher Notes:</strong> Add your own analytical notes, initial interpretations, and context.</li>
-                </ul>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', listStyleType: 'disc' }}>
+                    <li><strong>Date &amp; Time:</strong> Record when the data collection occurred.</li>
+                    <li><strong>Setting / Context:</strong> Describe the environment where the interview or observation took place.</li>
+                    <li><strong>Participant Info:</strong> Provide relevant, anonymous demographic details of the participant(s).</li>
+                    <li><strong>Key Responses:</strong> Transcribe or comprehensively summarise the most important answers or observed behaviours.</li>
+                    <li><strong>Researcher Notes:</strong> Add your own analytical notes, initial interpretations, and context.</li>
+                  </ul>
+                </div>
               ) : doc?.title?.toLowerCase().includes('report') ? (
-                <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                  <li><strong>Abstract:</strong> A brief 150-250 word summary of the entire study, from objectives to key conclusions.</li>
-                  <li><strong>Introduction:</strong> Restate the problem, research objectives, and the significance of the study.</li>
-                  <li><strong>Methodology:</strong> Detail how data was collected and analyzed.</li>
-                  <li><strong>Results & Findings:</strong> Present the raw data objectively, using tables and figures if necessary.</li>
-                  <li><strong>Discussion:</strong> Interpret the findings, connect them back to your literature review, and discuss implications.</li>
-                  <li><strong>Conclusion:</strong> Summarise the overall outcome and suggest areas for future research.</li>
-                </ol>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <p style={{ margin: 0, padding: '0.75rem 1rem', background: 'rgba(42,124,117,0.07)', borderLeft: '3px solid #2A7C75', borderRadius: '0 4px 4px 0', fontSize: '0.8rem' }}>
+                    The final report follows a standard academic format. Each chapter should be clearly labelled and numbered.
+                  </p>
+                  <ol style={{ paddingLeft: '1.4rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <li><strong>Title Page:</strong> Project title, author name &amp; matric no., supervisor, institution, and year.</li>
+                    <li><strong>Approval / Certification Page:</strong> Signed by supervisor and examiner.</li>
+                    <li><strong>Dedication, Acknowledgement, Table of Contents, List of Tables/Figures.</strong></li>
+                    <li><strong>Abstract:</strong> 150–250 word summary of objectives, methodology, and key findings.</li>
+                    <li><strong>Chapter 1 — Introduction:</strong> Background, problem statement, aim &amp; objectives, scope, and significance.</li>
+                    <li><strong>Chapter 2 — Literature Review:</strong> Conceptual &amp; Theoretical Framework, Empirical Studies, Appraisal &amp; Gap.</li>
+                    <li><strong>Chapter 3 — Methodology:</strong> Research design, population &amp; sampling, instruments, data collection procedure, analysis technique.</li>
+                    <li><strong>Chapter 4 — Results &amp; Discussion:</strong> Present findings objectively with tables/charts; interpret and connect to literature.</li>
+                    <li><strong>Chapter 5 — Conclusion &amp; Recommendations:</strong> Summarise key findings, limitations, and suggestions for future work.</li>
+                    <li><strong>References:</strong> All sources cited using APA / IEEE / Vancouver (confirm with your institution).</li>
+                    <li><strong>Appendices:</strong> Raw data, questionnaires, code snippets, ethics approval letters.</li>
+                  </ol>
+                </div>
               ) : (
-                <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                  <li><strong>Title:</strong> A clear, concise statement of the research topic.</li>
-                  <li><strong>Abstract:</strong> A brief summary (150-250 words) covering objectives, methodology, and expected outcomes.</li>
-                  <li><strong>Introduction & Background:</strong> Contextualise the problem and state why it is significant.</li>
-                  <li><strong>Statement of the Problem:</strong> Clearly define the specific issue the research will address.</li>
-                  <li><strong>Objectives:</strong> List primary and secondary research goals.</li>
-                  <li><strong>Literature Review:</strong> Summarise existing research and identify the gap this project fills.</li>
-                  <li><strong>Methodology:</strong> Describe the study design, data collection methods (e.g. surveys, interviews), and analysis techniques.</li>
-                  <li><strong>Timeline & Budget:</strong> A brief projection of project milestones and estimated costs.</li>
-                  <li><strong>References:</strong> Cite all sources using standard academic formatting (APA, IEEE, etc.).</li>
-                </ol>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  <p style={{ margin: 0, padding: '0.75rem 1rem', background: 'rgba(42,124,117,0.07)', borderLeft: '3px solid #2A7C75', borderRadius: '0 4px 4px 0', fontSize: '0.8rem' }}>
+                    A well-written proposal is the foundation of Chapter One of your final project write-up.
+                  </p>
+                  <ol style={{ paddingLeft: '1.4rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <li><strong>Title:</strong> A clear, concise statement of the research topic (include your name &amp; matric number).</li>
+                    <li><strong>Background:</strong> Contextualise the problem comprehensively — this section may include some initial literature review.</li>
+                    <li><strong>Problem Statement:</strong> Precisely define the specific issue the research will address.</li>
+                    <li><strong>Aim &amp; Objectives (Milestones):</strong> State the overall aim and break it into measurable objectives.</li>
+                    <li><strong>Methodology:</strong> Describe the research design with an illustrative model/architecture diagram.</li>
+                    <li><strong>Tools &amp; Hardware:</strong> List all software, algorithms, hardware components, or datasets to be used.</li>
+                    <li><strong>Assumptions:</strong> State any simplifying assumptions made in the study (if applicable).</li>
+                    <li><strong>Justification:</strong> Explain the significance and societal/academic impact of the project.</li>
+                    <li><strong>References:</strong> List all cited works using standard academic formatting (APA, IEEE, etc.).</li>
+                  </ol>
+                  <div>
+                    <strong style={{ fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Useful Resources</strong>
+                    <ul style={{ paddingLeft: '1.2rem', marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', listStyleType: 'disc' }}>
+                      <li><a href="https://scholar.google.com" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Google Scholar</a> — Find background literature</li>
+                      <li><a href="https://www.mendeley.com" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Mendeley</a> — Reference manager &amp; citation formatter</li>
+                      <li><a href="https://www.zotero.org" target="_blank" rel="noopener noreferrer" style={{ color: '#2A7C75' }}>Zotero</a> — Free citation &amp; bibliography tool</li>
+                    </ul>
+                  </div>
+                </div>
               )}
             </div>
             <div className="modal-actions" style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>

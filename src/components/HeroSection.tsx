@@ -305,7 +305,7 @@ export default function HeroSection() {
   return (
     <section className="hero">
       <div className="hero-left">
-        <p className="hero-eyebrow">Collaborative Research Management Platform — </p>
+        <p className="hero-eyebrow">Collaborative Research Management Platform</p>
 
         <h1 className="hero-h1">
           Where<br />
@@ -332,11 +332,11 @@ export default function HeroSection() {
         </div>
 
         {searchResult && (
-          <div className="mt-6 p-4 border rounded-xl animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ borderColor: 'rgba(42,124,117,0.3)', backgroundColor: 'rgba(42,124,117,0.05)' }}>
-            <h3 className="text-lg font-medium mb-1" style={{ color: '#1A1A18' }}>
-              Found <span style={{ color: '#2A7C75', fontWeight: 'bold' }}>{searchResult.count}</span> public projects matching &quot;{searchResult.query}&quot;
-            </h3>
-            <p className="text-sm" style={{ color: 'rgba(26,26,24,0.7)' }}>
+          <div className="hero-search-result">
+            <p className="hero-search-result__count">
+              Found <span>{searchResult.count}</span> public project{searchResult.count !== 1 ? 's' : ''} matching &ldquo;{searchResult.query}&rdquo;
+            </p>
+            <p className="hero-search-result__sub">
               Register and verify your university email to join these projects and collaborate.
             </p>
           </div>

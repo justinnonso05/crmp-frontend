@@ -16,7 +16,9 @@ interface Member   { userId: string; role: string; joinedAt: string; user: UserM
 interface Task {
   id: string; title: string; dueDate: string;
   isCompleted: boolean; assignedUserId: string | null;
+  assignedByUserId?: string | null;
   assignee?: UserMeta | null;
+  assigner?: UserMeta | null;
 }
 interface Document { id: string; title: string; updatedAt: string; lastModifiedBy: string; }
 interface Survey   { id: string; title: string; isActive: boolean; createdAt: string; }
@@ -63,48 +65,49 @@ function StageGuide({
   const guides: Record<string, { title: string, desc: string, action?: string, nextStage?: string }> = {
     DRAFT: {
       title: 'Drafting Proposal',
-      desc: 'Use the Proposal tab to draft your research intent. Choose to write it collaboratively using the document editor, or upload an existing file.'
+      desc: 'Use the Proposal tab to draft your research intent. A good proposal should include: a clear Title, Background & Problem Statement, Aim & Objectives, a brief Methodology with a model diagram, tools/software to be used, assumptions (if any), justification, and a list of References. Once complete, a well-written proposal becomes the foundation of Chapter One of your final project write-up.'
     },
     PROPOSAL_SUBMITTED: {
-      title: 'Proposal Submitted',
-      desc: 'Your proposal is currently under review by the assigned Reviewer. You cannot edit the proposal while it is under review.',
+      title: 'Proposal Submitted — Awaiting Review',
+      desc: 'Your proposal is currently under review by the assigned Reviewer. You cannot edit the proposal while it is under review. The Reviewer will either Approve it or request a Revision.',
     },
     PROPOSAL_APPROVED: {
       title: 'Proposal Approved — Begin Literature Review',
-      desc: 'Your proposal has been approved. Conduct a thorough literature review and summarise your references in the Documents tab.',
+      desc: 'Your proposal has been approved. Click "Begin Literature Review" to open a dedicated collaborative document for your Chapter Two. Your literature review should cover: (2.1) Conceptual Framework, (2.2) Theoretical Framework, (2.3) Empirical Studies, and (2.4) Appraisal of Reviewed Literature — including a summary table of related works with authors, methodology, results, strengths, and research gaps.',
       action: 'Begin Literature Review', nextStage: 'LITERATURE_REVIEW'
     },
     LITERATURE_REVIEW: {
       title: 'Literature Review in Progress',
-      desc: 'Cover all fundamental research and theoretical frameworks. Once your review is fully documented, advance to Data Collection.',
+      desc: 'Your review should be based on recent works (last 3 years preferred). Discuss existing solutions, their drawbacks, and the gap your project fills. Paraphrase — do not copy verbatim. Give due credit to all cited authors. Use the Summary Table at the end of the chapter listing: Author(s) & Year · Title · Methodology · Results · Strengths · Research Gap.',
       action: 'Finish Literature Review', nextStage: 'DATA_COLLECTION'
     },
     DATA_COLLECTION: {
       title: 'Data Collection Phase',
-      desc: 'Gather your research data using either inbuilt surveys (Quantitative) or external interviews/observations (Qualitative).'
+      desc: 'Gather your research data using either inbuilt surveys (Quantitative) or external interviews/observations (Qualitative). Ensure your sampling technique, instrument, and method of analysis are documented in your project write-up.'
     },
     DATA_ANALYSIS: {
       title: 'Data Analysis',
-      desc: 'Analyse your collected data, discuss findings with your team, and prepare for the final report.',
+      desc: 'Analyse your collected data using appropriate techniques for your domain. For AI/ML studies: consider AUC-ROC, Confusion Matrix, Precision-Recall, F1-Score, or BLEU. For Software/HCI research: consider SUS (System Usability Scale), TAM (Technology Acceptance Model), or UTAUT. For social/survey research: use SPSS, descriptive statistics, regression, or thematic analysis. Create a dedicated document to record your analysis notes and findings.',
       action: 'Finish Data Analysis', nextStage: 'REPORT_WRITING'
     },
     REPORT_WRITING: {
       title: 'Report Writing',
-      desc: 'Draft the final manuscript or report based on your analysis and literature review.',
+      desc: 'Draft the final manuscript. The standard format is: Title Page · Approval Page · Dedication · Acknowledgement · Table of Contents · List of Tables/Figures · Abstract · Chapters 1–5 (Intro, Literature Review, Methodology, Results & Discussion, Conclusion & Recommendations) · References · Appendices.',
       action: 'Submit Final Report', nextStage: 'FINAL_SUBMISSION'
     },
     FINAL_SUBMISSION: {
-      title: 'Final Submission',
-      desc: 'Your final report has been submitted for certification.',
+      title: 'Final Submission — Awaiting Reviewer Approval',
+      desc: 'Your final report has been submitted. The Reviewer must approve it before the project advances to the Certification stage. Please ensure your document is complete, properly formatted, and all references are cited.',
+      action: 'Approve Final Report', nextStage: 'CERTIFICATION'
     },
     CERTIFICATION: {
       title: 'Certification',
-      desc: 'The project is under final review for academic certification.',
+      desc: 'The project is under final review for academic certification. The Reviewer will certify the project upon confirming all requirements are met.',
       action: 'Certify Project', nextStage: 'COMPLETED'
     },
     COMPLETED: {
-      title: 'Project Completed',
-      desc: 'This project has been fully certified and archived.'
+      title: 'Project Completed 🎉',
+      desc: 'This project has been fully certified and archived. Congratulations to the entire research team!'
     }
   };
 
@@ -232,14 +235,31 @@ function StageGuide({
         )}
 
         {project.status !== 'DATA_COLLECTION' && project.status !== 'REPORT_WRITING' && guide.action && guide.nextStage && (
-          (guide.nextStage === 'COMPLETED' ? myRole === 'REVIEWER' : myRole !== 'REVIEWER') && (
-            <button
-              disabled={statusUpdating}
-              style={{ opacity: statusUpdating ? 0.7 : 1, background: '#1A1A18', color: '#F2EDE4', border: 'none', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: statusUpdating ? 'not-allowed' : 'pointer' }}
-              onClick={() => onAdvanceStatus(guide.nextStage!)}
-            >
-              {statusUpdating ? 'Updating...' : `${guide.action} →`}
-            </button>
+          // FINAL_SUBMISSION: only Reviewer can advance to CERTIFICATION; COMPLETED: Reviewer and PI can certify; all others: non-Reviewers advance
+          (guide.nextStage === 'CERTIFICATION' ? myRole === 'REVIEWER' :
+           guide.nextStage === 'COMPLETED' ? (myRole === 'REVIEWER' || myRole === 'PI') :
+           myRole !== 'REVIEWER') && (
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1rem' }}>
+              <button
+                disabled={statusUpdating}
+                style={{ opacity: statusUpdating ? 0.7 : 1, background: '#1A1A18', color: '#F2EDE4', border: 'none', borderRadius: '6px', padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: statusUpdating ? 'not-allowed' : 'pointer' }}
+                onClick={() => onAdvanceStatus(guide.nextStage!)}
+              >
+                {statusUpdating ? 'Updating...' : `${guide.action} →`}
+              </button>
+              
+              {/* Return for Revision button for Reviewer at Final Submission stage */}
+              {project.status === 'FINAL_SUBMISSION' && myRole === 'REVIEWER' && (
+                <button
+                  disabled={statusUpdating}
+                  className="dash-btn-ghost"
+                  style={{ opacity: statusUpdating ? 0.7 : 1, padding: '0.5rem 1.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: statusUpdating ? 'not-allowed' : 'pointer', color: '#d9534f' }}
+                  onClick={() => onAdvanceStatus('REPORT_WRITING')}
+                >
+                  Return for Revision
+                </button>
+              )}
+            </div>
           )
         )}
       </div>
@@ -263,6 +283,20 @@ export default function ProjectPage() {
   const [error, setError]             = useState('');
   const [tab, setTab]                 = useState<Tab>('proposal');
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && id) {
+      const savedTab = localStorage.getItem(`crmp-tab-${id}`);
+      if (savedTab) {
+        setTab(savedTab as Tab);
+      }
+    }
+  }, [id]);
+
+  const handleSetTab = (t: Tab) => {
+    setTab(t);
+    localStorage.setItem(`crmp-tab-${id}`, t);
+  };
+
   /* ── per-tab data ── */
   const [proposalMode, setProposalMode] = useState<'choose' | 'document' | 'upload'>('choose');
   const [proposalUploading, setProposalUploading] = useState(false);
@@ -277,6 +311,7 @@ export default function ProjectPage() {
 
   /* ── task modal ── */
   const [showTaskModal,  setShowTaskModal]  = useState(false);
+  const [selectedTask,   setSelectedTask]   = useState<Task | null>(null);
   const [taskTitle,      setTaskTitle]      = useState('');
   const [taskDue,        setTaskDue]        = useState('');
   const [taskAssignee,   setTaskAssignee]   = useState('');
@@ -371,6 +406,7 @@ export default function ProjectPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       setProject(d.project);
+      broadcastActivity('STAGE_ADVANCED', `Project stage advanced to ${newStatus.replace('_', ' ')}`, undefined, { newStatus, initiatorName: currentUser?.firstName });
     } catch (e: any) { setAlertMessage(e.message || 'Failed to update status'); }
     finally { setStatusUpdating(false); }
   }
@@ -422,12 +458,21 @@ export default function ProjectPage() {
     if (socket.connected) joinRoom();
     socket.on('connect', joinRoom);
 
+    const onActivity = () => {
+      // Background re-fetch to keep UI in sync with others without full page reload
+      apiFetch<{ project: Project }>(PROJECTS.DETAIL(id)).then(d => setProject(d.project)).catch(() => {});
+      fetchAllTabData();
+    };
+
+    socket.on('receive-activity', onActivity);
+
     return () => { 
       socket.emit('leave-project', id, currentUser.id); 
       socket.off('connect', joinRoom);
+      socket.off('receive-activity', onActivity);
       socket.disconnect(); 
     };
-  }, [id, currentUser]);
+  }, [id, currentUser, fetchAllTabData]);
 
   /* ─── derived ─── */
   const myRole    = project?.members?.find((m: any) => m.userId === currentUser?.id)?.role ?? '';
@@ -655,8 +700,12 @@ export default function ProjectPage() {
                 <select 
                   className={`proj-badge`} 
                   value={project.status} 
-                  onChange={e => handleUpdateStatus(e.target.value)}
-                  style={{ padding: '0.2rem 0.5rem', cursor: 'pointer', appearance: 'auto', background: 'var(--bg-hover)', color: 'var(--text)' }}
+                  onChange={e => {
+                    // Read-only: just a visual navigator for the PI, not a status changer
+                    // Actual advancement is via StageGuide buttons
+                  }}
+                  style={{ padding: '0.2rem 0.5rem', cursor: 'default', appearance: 'auto', background: 'var(--bg-hover)', color: 'var(--text)' }}
+                  title="Stage view — use the guide buttons below to advance"
                 >
                   <option value="DRAFT">DRAFT</option>
                   <option value="PROPOSAL_SUBMITTED">PROPOSAL SUBMITTED</option>
@@ -688,6 +737,46 @@ export default function ProjectPage() {
           <p className="proj-page-stat-label" style={{ marginTop: '0.8rem' }}>Tasks</p>
           <p className="proj-page-stat-num">{project.tasks.length}</p>
         </div>
+
+        {/* ── Task Details Modal ── */}
+        {selectedTask && (
+          <div className="modal-backdrop" onClick={() => setSelectedTask(null)}>
+            <div className="modal-box" onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <p className="auth-eyebrow">Task Details</p>
+                <h2 className="modal-title" style={{ marginTop: '0.2rem', marginBottom: '1.5rem' }}>{selectedTask.title}</h2>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
+                <div>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(26,26,24,0.5)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Status</p>
+                  <p style={{ fontSize: '0.95rem', fontWeight: 500, color: selectedTask.isCompleted ? '#2A7C75' : '#1A1A18' }}>
+                    {selectedTask.isCompleted ? 'Completed' : 'Incomplete'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(26,26,24,0.5)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Due Date</p>
+                  <p style={{ fontSize: '0.95rem', color: '#1A1A18' }}>{formatDate(selectedTask.dueDate)}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(26,26,24,0.5)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Assigned To</p>
+                  <p style={{ fontSize: '0.95rem', color: '#1A1A18' }}>
+                    {selectedTask.assignee ? `${selectedTask.assignee.firstName} ${selectedTask.assignee.lastName}` : <span style={{ color: 'rgba(26,26,24,0.4)', fontStyle: 'italic' }}>Unassigned</span>}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(26,26,24,0.5)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Assigned By</p>
+                  <p style={{ fontSize: '0.95rem', color: '#1A1A18' }}>
+                    {selectedTask.assigner ? `${selectedTask.assigner.firstName} ${selectedTask.assigner.lastName}` : <span style={{ color: 'rgba(26,26,24,0.4)', fontStyle: 'italic' }}>Unknown / System</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="modal-actions" style={{ marginTop: 'auto' }}>
+                <button className="dash-btn-ghost" onClick={() => setSelectedTask(null)} style={{ width: '100%' }}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ── Stage Guide & Interactive Lifecycle ── */}
@@ -730,7 +819,7 @@ export default function ProjectPage() {
           <button
             key={t}
             className={`proj-tab ${tab === t ? 'proj-tab--active' : ''}`}
-            onClick={() => setTab(t)}
+            onClick={() => handleSetTab(t)}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -878,22 +967,45 @@ export default function ProjectPage() {
             ) : (
               <ul className="task-list">
                 {project.tasks.map(task => (
-                  <li key={task.id} className={`task-item ${task.isCompleted ? 'task-item--done' : ''}`}>
-                    <button
-                      className="task-check"
-                      onClick={() => toggleTask(task)}
-                      aria-label={task.isCompleted ? 'Mark incomplete' : 'Mark complete'}
-                    >
-                      {task.isCompleted ? '✓' : '○'}
-                    </button>
-                    <div className="task-info">
-                      <span className="task-title">{task.title}</span>
-                      <span className="task-due">Due {formatDate(task.dueDate)}</span>
+                  <li 
+                    key={task.id} 
+                    className={`task-item ${task.isCompleted ? 'task-item--done' : ''}`}
+                    onClick={() => setSelectedTask(task)}
+                    style={{ cursor: 'pointer', transition: 'background 0.2s ease' }}
+                  >
+                    <div className="task-info" style={{ flex: 1 }}>
+                      <span className="task-title" style={{ textDecoration: task.isCompleted ? 'line-through' : 'none', color: task.isCompleted ? 'rgba(26,26,24,0.45)' : '#1A1A18' }}>{task.title}</span>
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.35rem', alignItems: 'center' }}>
+                        <span className="task-due">Due {formatDate(task.dueDate)}</span>
+                        {task.assignee && (
+                          <span className="task-due" style={{ color: '#2A7C75', fontWeight: 500 }}>
+                            {task.assignee.firstName} {task.assignee.lastName}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {task.assignee && (
-                      <span className="task-assignee">
-                        {task.assignee.firstName} {task.assignee.lastName}
-                      </span>
+                    {canWrite && (
+                      <button
+                        style={{
+                          padding: '0.4rem 0.875rem',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          background: task.isCompleted ? 'transparent' : '#1A1A18',
+                          color: task.isCompleted ? 'rgba(26,26,24,0.6)' : '#F2EDE4',
+                          border: task.isCompleted ? '1.5px solid rgba(26,26,24,0.15)' : '1.5px solid transparent',
+                          marginLeft: '1rem',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s ease',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTask(task);
+                        }}
+                      >
+                        {task.isCompleted ? 'Unmark' : 'Mark Complete'}
+                      </button>
                     )}
                   </li>
                 ))}
