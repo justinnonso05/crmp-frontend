@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiFetch, getUser, getToken } from '@/lib/api';
 import { PROJECTS, TASKS, DOCUMENTS, SURVEYS, OUTPUTS, UPLOAD, PROPOSAL, APPLICATIONS } from '@/lib/endpoints';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Lock, Globe } from 'lucide-react';
 import '../../../project-mobile.css';
 import { getSocket } from '@/lib/socket';
 import UserSearchInput from '@/components/dashboard/UserSearchInput';
@@ -41,7 +41,7 @@ interface Application {
   user: { id: string; firstName: string; lastName: string; email: string; faculty?: string; university?: string };
 }
 
-type Tab = 'proposal' | 'tasks' | 'documents' | 'surveys' | 'outputs' | 'members';
+type Tab = 'proposal' | 'tasks' | 'documents' | 'surveys' | 'outputs' | 'members' | 'settings';
 
 const ROLE_LABELS: Record<string, string> = {
   PI: 'Principal Investigator', CO_INVESTIGATOR: 'Co-Investigator',
@@ -382,7 +382,24 @@ export default function ProjectPage() {
     apiFetch<{ outputs: Output[] }>(OUTPUTS.LIST(id)).then(d => setOutputs(d.outputs)).catch(console.error);
   }, [id]);
 
-  /* ─── Status Update Handlers ─── */
+  /* ─── Status & Visibility Handlers ─── */
+  async function toggleVisibility() {
+    if (!project) return;
+    setStatusUpdating(true);
+    try {
+      const newVis = project.visibility === 'PRIVATE' ? 'PUBLIC' : 'PRIVATE';
+      const d = await apiFetch<{ project: Project }>(PROJECTS.UPDATE_VISIBILITY(id), {
+        method: 'PATCH',
+        body: JSON.stringify({ visibility: newVis }),
+      });
+      setProject(d.project);
+    } catch (e: any) {
+      setAlertMessage(e.message || 'Failed to update visibility');
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
+
   async function handleUpdateStatus(newStatus: string) {
     if (!project) return;
     setStatusUpdating(true);
@@ -725,7 +742,9 @@ export default function ProjectPage() {
               )}
             </div>
             
-            <span className="proj-role-chip" style={{ marginLeft: 'auto' }}>{ROLE_LABELS[myRole] ?? myRole}</span>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginLeft: 'auto' }}>
+              <span className="proj-role-chip">{ROLE_LABELS[myRole] ?? myRole}</span>
+            </div>
           </div>
           <h1 className="proj-page-title">{project.title}</h1>
           <p style={{ fontSize: '0.8125rem', color: '#2A7C75', fontWeight: 500, letterSpacing: '0.01em', marginBottom: '0.15rem' }}>{project.researchTopic}</p>
@@ -815,7 +834,7 @@ export default function ProjectPage() {
 
       {/* ── Tabs ── */}
       <div className="proj-tabs" style={{ flexWrap: 'wrap' }}>
-        {(['proposal', 'tasks', 'documents', 'surveys', 'outputs', 'members'] as Tab[]).map(t => (
+        {(['proposal', 'tasks', 'documents', 'surveys', 'outputs', 'members', 'settings'] as Tab[]).map(t => (
           <button
             key={t}
             className={`proj-tab ${tab === t ? 'proj-tab--active' : ''}`}
@@ -1215,6 +1234,55 @@ export default function ProjectPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* ════ SETTINGS ════ */}
+        {tab === 'settings' && (
+          <div>
+            <div className="proj-tab-head">
+              <h2 className="proj-tab-title">Project Settings</h2>
+            </div>
+            
+            <div style={{ maxWidth: '600px', padding: '1rem 0', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.2rem' }}>Project Visibility</h3>
+                  <p className="proj-card-desc">Determine who can see this project. Public projects can be viewed by anyone on the platform.</p>
+                </div>
+                {myRole === 'PI' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'var(--paper)', padding: '0.35rem 0.6rem', borderRadius: '20px', border: '1px solid rgba(0,0,0,0.08)' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: project.visibility === 'PRIVATE' ? 'var(--text)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <Lock size={12} /> PRIVATE
+                    </span>
+                    <button 
+                      onClick={toggleVisibility}
+                      disabled={statusUpdating}
+                      style={{
+                        width: '34px', height: '20px', borderRadius: '10px',
+                        background: project.visibility === 'PRIVATE' ? '#ef4444' : '#10b981',
+                        border: 'none', cursor: 'pointer', position: 'relative',
+                        transition: 'background 0.3s ease', padding: 0
+                      }}
+                      title={project.visibility === 'PRIVATE' ? 'Click to make Public' : 'Click to make Private'}
+                    >
+                      <div style={{
+                        width: '16px', height: '16px', borderRadius: '50%', background: '#fff',
+                        position: 'absolute', top: '2px', left: project.visibility === 'PRIVATE' ? '2px' : '16px',
+                        transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)', boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                      }} />
+                    </button>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: project.visibility === 'PUBLIC' ? 'var(--text)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <Globe size={12} /> PUBLIC
+                    </span>
+                  </div>
+                ) : (
+                  <span className="proj-badge" style={{ background: 'var(--bg-hover)', color: 'var(--text)' }}>
+                    {project.visibility === 'PRIVATE' ? '🔒 PRIVATE' : '🌍 PUBLIC'}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

@@ -35,6 +35,7 @@ export default function CollaborativeEditorPage() {
   const [showHints, setShowHints] = useState(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string, firstName: string, lastName: string } | null>(null);
 
   // Load user
@@ -246,6 +247,10 @@ export default function CollaborativeEditorPage() {
     document.body.removeChild(link);
   };
 
+  const toggleFullScreen = () => {
+    setIsFullScreen(!isFullScreen);
+  };
+
   const handleSubmitProposal = async () => {
     setSubmitting(true);
     try {
@@ -265,36 +270,87 @@ export default function CollaborativeEditorPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', backgroundColor: 'var(--surface)' }}>
       {/* Top Navigation Bar */}
-      <header className="editor-header">
-        <div className="editor-header-left">
-          <Link href={`/projects/${projectId}`} className="dash-btn-ghost editor-back-btn">
-            ← Back
-          </Link>
-          <h1 className="proj-title editor-title">{doc?.title}</h1>
-        </div>
-        <div className="editor-header-right">
-          <div className="editor-save-status">
-            {saving ? 'Saving...' : 'Saved'}
+      {!isFullScreen && (
+        <header className="editor-header">
+          <div className="editor-header-left">
+            <Link href={`/projects/${projectId}`} className="dash-btn-ghost editor-back-btn">
+              ← Back
+            </Link>
+            <h1 className="proj-title editor-title">{doc?.title}</h1>
           </div>
-          <button onClick={() => setShowHints(true)} className="dash-btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
-            💡 {doc?.title?.toLowerCase().includes('literature') ? 'Literature Review Guide' : doc?.title?.toLowerCase().includes('qualitative') || doc?.title?.toLowerCase().includes('data') ? 'Data Collection Guide' : doc?.title?.toLowerCase().includes('report') ? 'Report Writing Guide' : 'Proposal Guidelines'}
-          </button>
-          <button onClick={exportToDoc} className="dash-btn-primary editor-export-btn">
-            <span className="export-text-full">Export to .doc</span>
-            <span className="export-text-mobile">Export</span>
-          </button>
-          {doc?.title?.toLowerCase().includes('proposal') && project?.proposal?.status !== 'SUBMITTED' && project?.proposal?.status !== 'APPROVED' && (
-            <button onClick={() => setShowSubmitConfirm(true)} className="dash-btn-primary" style={{ background: '#111', color: '#fff', marginLeft: '0.5rem' }}>
-              Submit Proposal →
+          <div className="editor-header-right">
+            <div className="editor-save-status">
+              {saving ? 'Saving...' : 'Saved'}
+            </div>
+            <button onClick={() => setShowHints(true)} className="dash-btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+              💡 {doc?.title?.toLowerCase().includes('literature') ? 'Literature Review Guide' : doc?.title?.toLowerCase().includes('qualitative') || doc?.title?.toLowerCase().includes('data') ? 'Data Collection Guide' : doc?.title?.toLowerCase().includes('report') ? 'Report Writing Guide' : 'Proposal Guidelines'}
             </button>
-          )}
-        </div>
-      </header>
+            <button onClick={toggleFullScreen} className="dash-btn-ghost" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>
+              ⛶ Fullscreen
+            </button>
+            <button onClick={exportToDoc} className="dash-btn-primary editor-export-btn">
+              <span className="export-text-full">Export to .doc</span>
+              <span className="export-text-mobile">Export</span>
+            </button>
+            {doc?.title?.toLowerCase().includes('proposal') && project?.proposal?.status !== 'SUBMITTED' && project?.proposal?.status !== 'APPROVED' && (
+              <button onClick={() => setShowSubmitConfirm(true)} className="dash-btn-primary" style={{ background: '#111', color: '#fff', marginLeft: '0.5rem' }}>
+                Submit Proposal →
+              </button>
+            )}
+          </div>
+        </header>
+      )}
 
       {/* Editor Container */}
-      <main style={{ flex: 1, padding: '2rem', display: 'flex', justifyContent: 'center', overflowY: 'auto' }}>
-        <div style={{ width: '100%', maxWidth: '900px', backgroundColor: '#ffffff', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 4px 20px rgba(0,0,0,0.03)', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div ref={editorRef} style={{ flex: 1, minHeight: '600px', border: 'none' }} />
+      <main style={{ 
+        flex: 1, 
+        padding: isFullScreen ? '0' : '2rem', 
+        display: 'flex', 
+        justifyContent: 'center', 
+        overflowY: 'hidden', /* we want the editor to handle scroll, not the main */
+        position: 'relative'
+      }}>
+        {isFullScreen && (
+          <button 
+            onClick={toggleFullScreen}
+            style={{ 
+              position: 'fixed', 
+              top: '1rem', 
+              right: '1.5rem', 
+              zIndex: 9999, 
+              background: 'var(--paper)', 
+              color: 'var(--text)', 
+              border: '1px solid rgba(0,0,0,0.1)', 
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              padding: '0.5rem 1rem', 
+              borderRadius: '20px', 
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem'
+            }}
+          >
+            ✕ Exit Fullscreen
+          </button>
+        )}
+        <div style={{ 
+          width: '100%', 
+          maxWidth: isFullScreen ? '100%' : '900px', 
+          backgroundColor: '#ffffff', 
+          border: isFullScreen ? 'none' : '1px solid rgba(0,0,0,0.1)', 
+          boxShadow: isFullScreen ? 'none' : '0 4px 20px rgba(0,0,0,0.03)', 
+          borderRadius: isFullScreen ? '0' : '8px', 
+          overflow: 'hidden', 
+          display: 'flex', 
+          flexDirection: 'column',
+          height: isFullScreen ? '100vh' : 'auto',
+          position: isFullScreen ? 'fixed' : 'relative',
+          inset: isFullScreen ? 0 : 'auto',
+          zIndex: isFullScreen ? 9998 : 1
+        }}>
+          <div ref={editorRef} style={{ flex: 1, minHeight: isFullScreen ? '100vh' : '600px', border: 'none', display: 'flex', flexDirection: 'column' }} />
         </div>
       </main>
 

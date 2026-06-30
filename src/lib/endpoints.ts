@@ -32,6 +32,7 @@ export const PROJECTS = {
   ADD_MEMBER:    (id: string) => `${BASE}/api/projects/${id}/members`,
   REMOVE_MEMBER: (id: string, userId: string) => `${BASE}/api/projects/${id}/members/${userId}`,
   UPDATE_STATUS: (id: string) => `${BASE}/api/projects/${id}/status`,
+  UPDATE_VISIBILITY: (id: string) => `${BASE}/api/projects/${id}/visibility`,
 } as const;
 
 // ── Proposals ─────────────────────────────────────────────────────
