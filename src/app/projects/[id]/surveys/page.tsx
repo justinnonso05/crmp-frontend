@@ -273,7 +273,7 @@ export default function SurveyPage() {
                     placeholder="e.g. Patient Satisfaction Survey"
                     value={title}
                     onChange={e => setTitle(e.target.value)}
-                    style={{ fontSize: '1.2rem', padding: '0.8rem' }}
+                    style={{ fontSize: '1.2rem', padding: '0.8rem', width: '100%' }}
                   />
                 </div>
 
@@ -296,7 +296,7 @@ export default function SurveyPage() {
                             placeholder="Type your question..."
                             value={q.question}
                             onChange={e => updateQuestion(q.id, 'question', e.target.value)}
-                            style={{ fontWeight: 600 }}
+                            style={{ fontWeight: 600, width: '100%' }}
                           />
                         </div>
                       </div>
@@ -317,7 +317,7 @@ export default function SurveyPage() {
                                 className="auth-input" 
                                 value={opt}
                                 onChange={e => updateOption(q.id, optIndex, e.target.value)}
-                                style={{ padding: '0.4rem', fontSize: '0.9rem' }}
+                                style={{ padding: '0.4rem', fontSize: '0.9rem', width: '100%' }}
                               />
                             </div>
                           ))}

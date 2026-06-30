@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Collaborative Research Management Platform (CRMP) - Frontend
 
-## Getting Started
+This is the frontend application for the Collaborative Research Management Platform. It is a modern, responsive web application designed to facilitate academic and scientific research collaboration. The platform includes a real-time rich-text document editor, comprehensive project management, task tracking, and role-based access.
 
-First, run the development server:
+**Live URL**: [https://res-crmp.justinch.dev](https://res-crmp.justinch.dev)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Tech Stack
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript
+- **UI & Styling**: React 19, Tailwind CSS v4, Custom CSS
+- **Real-time Editor**: Quill JS & Quill-Cursors (for collaborative editing)
+- **WebSockets**: Socket.IO Client (live collaboration & notifications)
+- **Data Visualization**: Recharts
+- **Icons**: Lucide React
+- **Session Management**: JWT (jwt-decode)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Key Features
+- **Interactive Dashboard**: A personalized overview of active projects, assigned tasks, and notifications.
+- **Project Workspaces**: Dedicated areas for each research project containing modules for Proposals, Tasks, Documents, Surveys, Outputs, and Members.
+- **Live Collaborative Editor**: Google Docs-style real-time document editing using WebSockets and Quill. Includes live presence tracking (seeing other users' cursors) and document autosave.
+- **Lifecycle Management**: A visual stage guide tracking projects from Draft -> Proposal -> In Progress -> Review -> Completed.
+- **Dynamic Task Management**: Create, assign, and track tasks for team members.
+- **Responsive Design**: Designed to work beautifully on both desktop and mobile devices.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setup & Installation
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-## Learn More
+2. **Environment Variables:**
+   Create a `.env.local` file in the root directory and add the backend API URL:
+   ```env
+   NEXT_PUBLIC_API_URL="http://localhost:3000/api"
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+3. **Running the Application:**
+   - **Development**: `npm run dev`
+   - **Production Build**: `npm run build`
+   - **Start Production Server**: `npm run start`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Structure
+- `src/app`: Next.js App Router pages and layouts.
+- `src/components`: Reusable UI components (Modals, Charts, Alerts, etc.).
+- `src/lib`: Core utilities including API fetch wrappers, WebSockets management (`socket.ts`), and API endpoints registry (`endpoints.ts`).
+- `src/styles`: Global CSS, Tailwind configurations, and component-specific stylesheets (like `editor.css` and `project-mobile.css`).

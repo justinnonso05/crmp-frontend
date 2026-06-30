@@ -851,8 +851,8 @@ export default function ProjectPage() {
         {/* ════ PROPOSAL ════ */}
         {tab === 'proposal' && (
           <div>
-            <div className="proj-tab-head">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div className="proj-tab-head" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <h2 className="proj-tab-title">Project Proposal</h2>
                 <button onClick={() => setShowHints(true)} className="dash-btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>💡 Proposal Guidelines</button>
               </div>
