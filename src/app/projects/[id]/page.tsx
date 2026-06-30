@@ -25,7 +25,7 @@ interface Survey   { id: string; title: string; isActive: boolean; createdAt: st
 interface Output   { id: string; outputType: string; citation: string; fileUrl?: string; createdAt: string; }
 interface Project {
   id: string; title: string; description: string; researchTopic: string;
-  status: string; createdAt: string;
+  status: string; createdAt: string; visibility: string;
   members: Member[]; tasks: Task[];
   documents?: Document[];
   surveys?: Survey[];
